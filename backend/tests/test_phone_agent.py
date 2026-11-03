@@ -73,3 +73,12 @@ def test_target_phrase_is_grounded_to_coordinates():
     assert out["action"] == "tap" and (out["x"], out["y"]) == (540, 1200) and "target" not in out
     none = PhoneAgent(client, "m", locate=lambda *a: None).next_action("g", obs, [], 1)
     assert none["action"] == "fail"
+
+def test_generic_confirm_on_money_screen_is_gated_but_not_elsewhere():
+    from phone_agent import PhoneObservation, apply_safety_gate
+    money = PhoneObservation(1080, 2400, "com.bank", [
+        {"id": 0, "text": "Confirm", "clickable": True}, {"id": 1, "text": "Send to Alex  $500.00"}])
+    out = apply_safety_gate({"action": "tap", "node": 0, "reason": "next"}, money, "pay alex")
+    assert out["needs_confirmation"] and "$500.00" in out["confirm_prompt"]
+    plain = PhoneObservation(1080, 2400, "com.app", [{"id": 0, "text": "Confirm", "clickable": True}, {"id": 1, "text": "Welcome"}])
+    assert "needs_confirmation" not in apply_safety_gate({"action": "tap", "node": 0, "reason": "next"}, plain, "g")

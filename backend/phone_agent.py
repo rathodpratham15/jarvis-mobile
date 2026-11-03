@@ -60,6 +60,10 @@ _SENSITIVE = re.compile(
     re.IGNORECASE,
 )
 
+# Generic buttons that become consequential when the screen is about money or a recipient.
+_GENERIC_CONFIRM = re.compile(r"^\W*(confirm|continue|next|done|ok|yes|proceed|agree|accept|approve|authori[sz]e|apply|submit)\W*$", re.I)
+_RISK_CONTEXT = re.compile(r"(\$\s?\d|₹\s?\d|€\s?\d|£\s?\d|\b(total|amount|balance|payment|pay to|recipient|send to|transfer|card number|order summary|delete|permanently)\b)", re.I)
+
 _VALID_ACTIONS = {
     "tap", "type", "scroll", "back", "home", "open_app", "wait", "done", "fail",
 }
@@ -163,19 +167,30 @@ def validate_action(action: Optional[dict], obs: PhoneObservation) -> dict:
     return action
 
 
+def _risk_lines(obs: PhoneObservation) -> list[str]:
+    out = []
+    for n in obs.nodes:
+        t = (n.get("text") or n.get("desc") or "").strip().replace("\n", " ")
+        if t and _RISK_CONTEXT.search(t) and t not in out:
+            out.append(t[:60])
+    return out[:3]
+
+
 def apply_safety_gate(action: dict, obs: PhoneObservation, goal: str) -> dict:
-    """Flag consequential actions so the device asks the user before executing."""
+    """Flag consequential taps so the device asks the user before executing.
+    A tap is consequential if its label/reason is sensitive, OR it is a generic Confirm/Continue button on a
+    screen that shows money, a recipient or a deletion. The prompt quotes what is on screen."""
     if action.get("action") != "tap":
         return action
     label = _target_label(action, obs.nodes)
     haystack = f"{label} {action.get('reason', '')}"
-    if _SENSITIVE.search(haystack):
+    context = _risk_lines(obs)
+    risky = bool(_SENSITIVE.search(haystack)) or (bool(_GENERIC_CONFIRM.match(label)) and bool(context))
+    if risky:
         action = dict(action)
         action["needs_confirmation"] = True
-        action["confirm_prompt"] = (
-            f'JARVIS wants to tap "{label or "an element"}" '
-            f'for: {goal[:80]}. Allow?'
-        )
+        detail = f' Screen shows: {"; ".join(context)}.' if context else ""
+        action["confirm_prompt"] = f'JARVIS wants to tap "{label or "an element"}" for: {goal[:80]}.{detail} Allow?'
     return action
 
 
