@@ -1,6 +1,9 @@
 """JARVIS Mobile backend — one stateless endpoint that decides the phone's next action."""
 import hmac
 import os
+import threading
+import time
+from collections import defaultdict, deque
 
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request
@@ -18,6 +21,25 @@ assistant = build_assistant()
 TOKEN = os.getenv("JARVIS_DEVICE_TOKEN", "")
 
 
+_hits: dict = defaultdict(deque)
+_hits_lock = threading.Lock()
+RATE_PER_MIN = int(os.getenv("JARVIS_RATE_PER_MIN", "90"))
+
+
+def rate_limited(key: str, now: float = None, limit: int = None) -> bool:
+    """Sliding 60 s window per client. True = reject this request."""
+    now = time.time() if now is None else now
+    limit = RATE_PER_MIN if limit is None else limit
+    with _hits_lock:
+        q = _hits[key]
+        while q and now - q[0] > 60:
+            q.popleft()
+        if len(q) >= limit:
+            return True
+        q.append(now)
+        return False
+
+
 @app.before_request
 def _auth():
     if request.method == "OPTIONS" or request.path == "/api/health":
@@ -25,6 +47,9 @@ def _auth():
     sent = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
     if not TOKEN or not hmac.compare_digest(sent, TOKEN):
         return jsonify(error="unauthorized"), 401
+    client = (request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip())
+    if rate_limited(f"{client}|{sent[:8]}"):
+        return jsonify(error="too many requests, slow down"), 429
     return None
 
 

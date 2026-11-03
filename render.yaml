@@ -1,0 +1,32 @@
+# Render Blueprint: one web service for the Flask backend. Secrets are entered in the dashboard (sync: false).
+services:
+  - type: web
+    name: jarvis-mobile-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One worker (the ElevenLabs budget file and rate limiter are per-process); threads handle concurrency.
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: META_API_BASE_URL
+        value: https://api.meta.ai/v1
+      - key: META_MODEL
+        value: muse-spark-1.3
+      - key: META_REASONING_EFFORT
+        value: low
+      - key: ELEVENLABS_DAILY_CHARS
+        value: "3000"
+      - key: JARVIS_RATE_PER_MIN
+        value: "90"
+      - key: META_API_KEY
+        sync: false
+      - key: JARVIS_DEVICE_TOKEN
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
