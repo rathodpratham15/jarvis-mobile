@@ -120,3 +120,36 @@ def test_rate_limit_sliding_window():
     assert rate_limited("t1", now=2, limit=2)            # third request inside the minute is rejected
     assert not rate_limited("t1", now=62, limit=2)       # window has moved on
     assert not rate_limited("other", now=2, limit=2)     # other clients unaffected
+
+
+def test_fastpath_simple_commands_skip_the_model():
+    from assistant import fastpath
+    assert fastpath("Set an alarm for 8 a.m.") == {"type": "device", "action": "set_alarm",
+            "args": {"hour": 8, "minute": 0}, "say": "Alarm set for 8 AM."}
+    assert fastpath("set an alarm for 7:30 pm")["args"] == {"hour": 19, "minute": 30}
+    assert fastpath("wake me up at 12 am")["args"]["hour"] == 0
+    assert fastpath("set a 10 minute timer")["args"] == {"seconds": 600}
+    assert fastpath("set a timer for 1 hour")["say"] == "Timer set for 1 hour."
+    assert fastpath("turn off the flashlight")["args"] == {"on": False}
+
+
+def test_fastpath_leaves_compound_and_ambiguous_to_the_model():
+    from assistant import fastpath
+    assert fastpath("set an alarm for 7 am and text mom i'm late") is None
+    assert fastpath("set an alarm for 7") is None            # am or pm? let the model ask
+    assert fastpath("set an alarm for 25 pm") is None
+    assert fastpath("text mom hello") is None
+
+
+def test_intro_is_instant_and_spoken_as_jarvis():
+    from assistant import fastpath
+    for q in ("who are you", "Introduce yourself", "hey what's your name?", "intro"):
+        out = fastpath(q)
+        assert out and "introduce myself" in out["say"] and "Jarvis" in out["say"] and "J.A.R.V.I.S" not in out["say"]
+    assert fastpath("what is the weather who are you asking about in this long sentence of words here") is None
+
+
+def test_turn_uses_fastpath_only_without_context():
+    class Boom:
+        chat = NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(AssertionError("model should not be called"))))
+    assert Assistant(Boom(), "m").turn("set an alarm for 8 am")["action"] == "set_alarm"

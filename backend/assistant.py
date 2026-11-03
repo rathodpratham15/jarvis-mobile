@@ -10,6 +10,7 @@ Server tools run here; device tools are returned to the phone, which executes th
 from __future__ import annotations
 
 import json
+import re
 import logging
 import os
 from datetime import datetime
@@ -41,6 +42,57 @@ Compound requests and memory:
 - If a detail needed by an earlier step is missing, ask_user first instead of guessing.
 - remember: when the user says "remember ..." or states a lasting preference ("always WhatsApp Mom"). forget: when asked to forget something. Asked what you remember -> answer from the memory list below.
 Never claim you did something unless you called the tool. Never invent phone numbers."""
+
+INTRO = ("Hi, allow me to introduce myself. I am J.A.R.V.I.S, a virtual artificial intelligence, and I'm here to assist "
+         "you with a variety of tasks as best I can, 24 hours a day, 7 days a week. Importing all preferences from "
+         "home interface. Systems are now fully operational.")
+_INTRO_RE = re.compile(r"\b(who are you|what are you|introduce yourself|introduction|intro|tell me about yourself|"
+                       r"what(?: s| is)? your name|what can you do)\b")
+_ALARM_RE = re.compile(r"^(?:please )?(?:set|create|make) (?:an? )?alarm (?:for|at) (\d{1,2})(?::(\d{2}))? ?(am|pm)$"
+                       r"|^(?:please )?wake me(?: up)? at (\d{1,2})(?::(\d{2}))? ?(am|pm)$")
+_TIMER_RE = re.compile(r"^(?:please )?(?:set|start|create) (?:an? )?(\d+|a|an) ?(second|sec|minute|min|hour|hr)s? timer$"
+                       r"|^(?:please )?(?:set|start) (?:an? )?timer (?:for|of) (\d+|a|an) ?(second|sec|minute|min|hour|hr)s?$")
+_LIGHT_RE = re.compile(r"^(?:please )?turn (on|off) (?:the |my )?(?:flashlight|torch)$|^(?:please )?(?:flashlight|torch) (on|off)$")
+
+
+def _norm(u: str) -> str:
+    u = u.lower().replace("a.m.", "am").replace("p.m.", "pm")
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9: ]", " ", u)).strip()
+
+
+def fastpath(utterance: str) -> Optional[dict]:
+    """Instant answers for unambiguous single commands: no model call, so no 2-6 s wait.
+    Anything compound or ambiguous returns None and goes to the model."""
+    u = _norm(utterance or "")
+    if not u or len(u) > 80:
+        return None
+    if _INTRO_RE.search(u) and len(u.split()) <= 8:
+        return {"type": "answer", "say": INTRO.replace("J.A.R.V.I.S", "Jarvis"),
+                "card": {"title": "J.A.R.V.I.S", "subtitle": "Just A Rather Very Intelligent System", "big": "",
+                         "rows": [], "text": INTRO}}
+    m = _ALARM_RE.match(u)
+    if m:
+        g = [x for x in m.groups() if x is not None]
+        h, mi, ap = int(g[0]), int(g[1]) if len(g) == 3 else 0, g[-1]
+        if 1 <= h <= 12 and 0 <= mi <= 59:
+            h24 = h % 12 + (12 if ap == "pm" else 0)
+            return {"type": "device", "action": "set_alarm", "args": {"hour": h24, "minute": mi},
+                    "say": f"Alarm set for {h}{':%02d' % mi if mi else ''} {ap.upper()}."}
+    m = _TIMER_RE.match(u)
+    if m:
+        g = [x for x in m.groups() if x is not None]
+        n = 1 if g[0] in ("a", "an") else int(g[0])
+        unit = g[1]
+        secs = n * (3600 if unit.startswith(("hour", "hr")) else 60 if unit.startswith("min") else 1)
+        if 1 <= secs <= 86400:
+            label = f"{n} {'hour' if secs % 3600 == 0 and unit.startswith(('hour','hr')) else 'minute' if unit.startswith('min') else 'second'}{'' if n == 1 else 's'}"
+            return {"type": "device", "action": "set_timer", "args": {"seconds": secs}, "say": f"Timer set for {label}."}
+    m = _LIGHT_RE.match(u)
+    if m:
+        on = (m.group(1) or m.group(2)) == "on"
+        return {"type": "device", "action": "flashlight", "args": {"on": on}, "say": f"Flashlight {'on' if on else 'off'}."}
+    return None
+
 
 WMO = {0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog",
        51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain",
@@ -141,6 +193,10 @@ class Assistant:
              server_tools: Optional[dict[str, Callable]] = None, history: Optional[list[dict]] = None,
              messaging_apps: Optional[list[str]] = None, screen: Optional[dict] = None,
              now: str = "", tz: str = "", memory: Optional[list[str]] = None) -> dict:
+        if not attachments and not screen and not history:
+            fast = fastpath(utterance)
+            if fast:
+                return fast
         tools_impl = server_tools or {"get_weather": get_weather, "get_datetime": get_datetime}
         user: list[dict] = [{"type": "text", "text": utterance}]
         if screen and screen.get("b64"):

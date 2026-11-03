@@ -56,7 +56,7 @@ final class VoiceRecorder {
             if (calib < 12) { noise += rms / 12; calib++; continue; }   // first ~240 ms = room noise floor
             double thr = Math.max(700, noise * 2.5);
             if (rms > thr) { spoke = true; lastVoice = now; }
-            if (spoke && now - lastVoice > 1100) break;      // paused after speaking
+            if (spoke && now - lastVoice > 900) break;      // paused after speaking
             if (!spoke && elapsed > 7000) break;             // never started
             if (elapsed > 15000) break;                      // hard cap
         }
