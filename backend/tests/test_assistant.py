@@ -90,3 +90,25 @@ def test_screen_goes_to_the_model_with_context_and_time():
     assert "2026-11-02T18:00" in seen["messages"][0]["content"]
     assert out["type"] == "device" and out["action"] == "add_calendar_event"
     assert out["args"]["start"] == "2026-11-06T19:00"
+
+
+def test_compound_request_becomes_mission_in_order():
+    c = Scripted(msg("All set.", [call("send_message", contact="Mom", body="I'm late", app="whatsapp", say="Texted Mom."),
+                                  call("set_alarm", hour=7, minute=0, say="Alarm set for 7."),
+                                  call("add_calendar_event", title="Dinner", start="2026-11-03T19:00", say="Added dinner.")]))
+    out = Assistant(c, "m").turn("text mom i'm late, alarm at 7, add dinner at 7pm tomorrow")
+    assert out["type"] == "mission" and out["say"] == "All set."
+    assert [s["action"] for s in out["steps"]] == ["send_message", "set_alarm", "add_calendar_event"]
+    assert out["steps"][1]["args"] == {"hour": 7, "minute": 0} and out["steps"][0]["say"] == "Texted Mom."
+
+
+def test_remember_is_a_device_action_and_memory_reaches_prompt():
+    seen = {}
+    class Spy(Scripted):
+        def _create(self, **kw):
+            seen["system"] = kw["messages"][0]["content"]
+            return super()._create(**kw)
+    c = Spy(msg(calls=[call("remember", fact="Mom: WhatsApp", say="Got it.")]))
+    out = Assistant(c, "m").turn("always whatsapp mom", memory=["Dad: SMS"])
+    assert out["action"] == "remember" and out["args"] == {"fact": "Mom: WhatsApp"}
+    assert "Dad: SMS" in seen["system"]

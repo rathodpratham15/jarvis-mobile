@@ -49,6 +49,8 @@ final class DeviceActions {
                 case "send_message": return sendMessage(ctx, a);
                 case "call_contact": return callContact(ctx, a);
                 case "add_calendar_event": return addCalendarEvent(ctx, a);
+                case "remember": Memory.remember(ctx, a.getString("fact")); return Result.ok();
+                case "forget": return Memory.forget(ctx, a.getString("fact")) > 0 ? Result.ok() : Result.err("I don't have anything like that saved.");
                 default: { String e = runSimple(ctx, name, a); return e == null ? Result.ok() : Result.err(e); }
             }
         } catch (Exception e) {

@@ -36,6 +36,10 @@ Screen awareness:
 - If a SCREEN image is attached, "this", "here" and "it" refer to it. Answer questions about it directly ("what does this say", "summarize this", "translate this", "who is this from").
 - For actions on the current screen (reply to a message, press something, fill a field) call operate_phone with a goal written for an ALREADY OPEN screen: name the app and exactly what to do, e.g. "In the open WhatsApp chat with Rohan, type \"I'll be late\" in the message box and tap Send."
 - For an event or date shown on the screen, call add_calendar_event. Resolve relative dates against the current local time given below.
+Compound requests and memory:
+- If one request contains several actions ("text Mom I'm late, set an alarm for 7 and add dinner to my calendar"), call ALL the tools in the SAME turn, in order. Put one short overall confirmation in your message content.
+- If a detail needed by an earlier step is missing, ask_user first instead of guessing.
+- remember: when the user says "remember ..." or states a lasting preference ("always WhatsApp Mom"). forget: when asked to forget something. Asked what you remember -> answer from the memory list below.
 Never claim you did something unless you called the tool. Never invent phone numbers."""
 
 WMO = {0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Fog",
@@ -77,13 +81,18 @@ TOOLS = [
          "start": {"type": "string", "description": "Local start time, ISO format YYYY-MM-DDTHH:MM"},
          "end": {"type": "string", "description": "Optional local end time, same format; default 1 hour"},
          "location": {"type": "string"}, **_SAY}, ["title", "start", "say"]),
+    _fn("remember", "Save a short fact or preference about the user (e.g. 'Mom: use WhatsApp for messages'). "
+        "Only when the user asks you to remember something or states a lasting preference.",
+        {"fact": {"type": "string"}, **_SAY}, ["fact", "say"]),
+    _fn("forget", "Delete a saved memory. fact is a keyword or the whole memory; 'all' clears everything.",
+        {"fact": {"type": "string"}, **_SAY}, ["fact", "say"]),
     _fn("ask_user", "Ask the user ONE short question to get missing information, then wait for the reply.",
         {"question": {"type": "string"}}, ["question"]),
     _fn("operate_phone", "Fallback: operate the phone's screen to accomplish a goal when no other tool fits.",
         {"goal": {"type": "string", "description": "Full, self-contained instruction."}}, ["goal"]),
 ]
 DEVICE_TOOLS = {"set_alarm", "set_timer", "flashlight", "open_app", "dial_number", "send_sms",
-                "send_message", "call_contact", "add_calendar_event"}
+                "send_message", "call_contact", "add_calendar_event", "remember", "forget"}
 
 
 def get_weather(location: str, units: str = "", _http: Optional[httpx.Client] = None) -> dict:
@@ -131,7 +140,7 @@ class Assistant:
     def turn(self, utterance: str, units: str = "imperial", attachments: Optional[list[str]] = None,
              server_tools: Optional[dict[str, Callable]] = None, history: Optional[list[dict]] = None,
              messaging_apps: Optional[list[str]] = None, screen: Optional[dict] = None,
-             now: str = "", tz: str = "") -> dict:
+             now: str = "", tz: str = "", memory: Optional[list[str]] = None) -> dict:
         tools_impl = server_tools or {"get_weather": get_weather, "get_datetime": get_datetime}
         user: list[dict] = [{"type": "text", "text": utterance}]
         if screen and screen.get("b64"):
@@ -146,6 +155,9 @@ class Assistant:
             system += f"\nCurrent local time: {now}" + (f" ({tz})." if tz else ".")
         if messaging_apps is not None:
             system += f"\nMessaging apps installed on this phone: {', '.join(messaging_apps) or 'none'}."
+        if memory:
+            system += ("\nWhat you remember about the user (use it silently, e.g. a remembered app for a contact "
+                       "means do not ask which app): " + "; ".join(m[:120] for m in memory[:30]) + ".")
         prior = [{"role": h["role"], "content": str(h["content"])[:500]} for h in (history or [])[-8:]
                  if isinstance(h, dict) and h.get("role") in ("user", "assistant") and h.get("content")]
         msgs: list[dict] = [{"role": "system", "content": system}, *prior, {"role": "user", "content": user}]
@@ -169,6 +181,17 @@ class Assistant:
             msgs.append({"role": "assistant", "content": m.content, "tool_calls": [
                 {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
                 for c in calls]})
+            dev = [c for c in calls if c.function.name in DEVICE_TOOLS]
+            if len(dev) >= 2 and len(dev) == len(calls):
+                steps = []
+                for c in dev:
+                    try:
+                        a = json.loads(c.function.arguments or "{}")
+                    except json.JSONDecodeError:
+                        a = {}
+                    steps.append({"action": c.function.name, "say": a.pop("say", None) or "Done.", "args": a})
+                return {"type": "mission", "steps": steps,
+                        "say": (m.content or "").strip() or f"Done, {len(steps)} things."}
             for c in calls:
                 name = c.function.name
                 try:
