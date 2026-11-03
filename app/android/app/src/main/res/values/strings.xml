@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JARVIS</string>
+    <string name="title_activity_main">JARVIS</string>
+    <string name="package_name">com.jarvis.assistant</string>
+    <string name="custom_url_scheme">com.jarvis.assistant</string>
+    <string name="accessibility_service_description">Lets JARVIS see your screen and tap, type and scroll for you when you ask it to perform a task.</string>
+</resources>
