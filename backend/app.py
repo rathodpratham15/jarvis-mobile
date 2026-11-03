@@ -12,7 +12,7 @@ from phone_agent import PhoneObservation, build_phone_agent
 
 load_dotenv()
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["capacitor://localhost", "http://localhost", "https://localhost", "http://localhost:5173"])
 agent = build_phone_agent()
 assistant = build_assistant()
 TOKEN = os.getenv("JARVIS_DEVICE_TOKEN", "")

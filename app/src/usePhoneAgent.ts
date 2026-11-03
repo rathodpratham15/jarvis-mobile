@@ -25,9 +25,9 @@ export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => P
     setSteps([]); setMessage(""); setStatus("running");
     const history: string[] = [];
     // Leave our own UI first so the agent observes the target app, not this screen.
-    await DeviceControl.act({ action: "home" });
-    await sleep(900);
     try {
+      await DeviceControl.act({ action: "home" });
+      await sleep(900);
       for (let step = 1; step <= MAX_STEPS; step++) {
         if (stopRef.current) { setStatus("stopped"); setMessage("Stopped."); return; }
         const observation = await DeviceControl.observe({ screenshot: true });
