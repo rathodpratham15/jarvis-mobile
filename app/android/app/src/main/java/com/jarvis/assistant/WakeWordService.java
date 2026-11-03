@@ -30,7 +30,7 @@ import org.vosk.android.StorageService;
 public class WakeWordService extends Service implements RecognitionListener {
     static final String ACTION_STOP = "com.jarvis.assistant.WAKE_STOP";
     private static final String CHANNEL = "wake";
-    private static final String GRAMMAR = "[\"hey jarvis\", \"jarvis\", \"[unk]\"]";
+    private static final String GRAMMAR = "[\"hey jarvis\", \"[unk]\"]";
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
     static volatile boolean enabled;
@@ -105,6 +105,7 @@ public class WakeWordService extends Service implements RecognitionListener {
         if (model == null || speech != null || !enabled) return;
         try {
             Recognizer rec = new Recognizer(model, 16000f, GRAMMAR);
+            rec.setWords(true);   // per-word confidence, used to reject background chatter
             speech = new SpeechService(rec, 16000f);
             speech.startListening(this);
             updateNotification("Listening for \u201cHey Jarvis\u201d");
@@ -118,10 +119,19 @@ public class WakeWordService extends Service implements RecognitionListener {
         if (speech != null) { speech.stop(); speech.shutdown(); speech = null; }
     }
 
+    /** Minimum confidence for BOTH words; background conversation scores lower than a deliberate "hey jarvis". */
+    private static final double MIN_CONF = 0.85;
+
     private void maybeTrigger(String json, String key) {
         try {
-            String t = new JSONObject(json).optString(key);
-            if (!t.contains("jarvis")) return;
+            JSONObject o = new JSONObject(json);
+            if (!"hey jarvis".equals(o.optString(key).trim())) return;
+            org.json.JSONArray words = o.optJSONArray("result");
+            if (words == null || words.length() < 2) return;
+            double min = 1;
+            for (int i = 0; i < words.length(); i++) min = Math.min(min, words.getJSONObject(i).optDouble("conf", 0));
+            android.util.Log.i("JarvisWake", "heard 'hey jarvis' conf=" + min);
+            if (min < MIN_CONF) return;
         } catch (Exception e) { return; }
         long now = System.currentTimeMillis();
         if (now - lastTrigger < 4000) return;
@@ -137,7 +147,7 @@ public class WakeWordService extends Service implements RecognitionListener {
         });
     }
 
-    @Override public void onPartialResult(String h) { maybeTrigger(h, "partial"); }
+    @Override public void onPartialResult(String h) { }   // partials fire on the first syllable: too jumpy
     @Override public void onResult(String h) { maybeTrigger(h, "text"); }
     @Override public void onFinalResult(String h) { maybeTrigger(h, "text"); }
     @Override public void onError(Exception e) { MAIN.post(() -> { stopListening(); MAIN.postDelayed(this::startListening, 2000); }); }
