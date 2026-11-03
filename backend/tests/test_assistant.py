@@ -112,3 +112,11 @@ def test_remember_is_a_device_action_and_memory_reaches_prompt():
     out = Assistant(c, "m").turn("always whatsapp mom", memory=["Dad: SMS"])
     assert out["action"] == "remember" and out["args"] == {"fact": "Mom: WhatsApp"}
     assert "Dad: SMS" in seen["system"]
+
+
+def test_rate_limit_sliding_window():
+    from app import rate_limited
+    assert not rate_limited("t1", now=0, limit=2) and not rate_limited("t1", now=1, limit=2)
+    assert rate_limited("t1", now=2, limit=2)            # third request inside the minute is rejected
+    assert not rate_limited("t1", now=62, limit=2)       # window has moved on
+    assert not rate_limited("other", now=2, limit=2)     # other clients unaffected
