@@ -1,0 +1,258 @@
+[
+ {
+  "screen": "clock",
+  "label": "Add alarm",
+  "A_point": [
+   885,
+   1025
+  ],
+  "A_s": 8.1,
+  "phrase": "plus icon",
+  "B_point": [
+   899,
+   890
+  ],
+  "B_s": 4.6,
+  "A_hit": false,
+  "B_hit": true
+ },
+ {
+  "screen": "clock",
+  "label": "More options",
+  "A_point": [
+   920,
+   375
+  ],
+  "A_s": 4.8,
+  "phrase": "three dots icon",
+  "B_point": [
+   994,
+   889
+  ],
+  "B_s": 4.0,
+  "A_hit": false,
+  "B_hit": true
+ },
+ {
+  "screen": "clock",
+  "label": "Close tips",
+  "A_point": [
+   918,
+   435
+  ],
+  "A_s": 4.1,
+  "phrase": "Top-right X icon",
+  "B_point": [
+   991,
+   1037
+  ],
+  "B_s": 5.5,
+  "A_hit": false,
+  "B_hit": true
+ },
+ {
+  "screen": "clock",
+  "label": "12:30 am, Tuesday, 3 November",
+  "A_point": [
+   500,
+   610
+  ],
+  "A_s": 7.3,
+  "phrase": "12:30 am alarm",
+  "B_point": null,
+  "B_s": 5.7,
+  "A_hit": false,
+  "B_hit": false
+ },
+ {
+  "screen": "clock",
+  "label": "3:10 am, Tuesday, 3 November",
+  "A_point": [
+   500,
+   1870
+  ],
+  "A_s": 8.2,
+  "phrase": "3:10 am alarm",
+  "B_point": null,
+  "B_s": 5.0,
+  "A_hit": false,
+  "B_hit": false
+ },
+ {
+  "screen": "clock",
+  "label": "3:20 am, Tuesday, 3 November",
+  "A_point": [
+   500,
+   2100
+  ],
+  "A_s": 8.2,
+  "phrase": "3:20 am alarm",
+  "B_point": null,
+  "B_s": 4.3,
+  "A_hit": false,
+  "B_hit": false
+ },
+ {
+  "screen": "drawer",
+  "label": "1.Google, Folder",
+  "A_point": [
+   150,
+   430
+  ],
+  "A_s": 5.1,
+  "phrase": "1.Google folder",
+  "B_point": null,
+  "B_s": 8.7,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "drawer",
+  "label": "4.Social Media, Folder",
+  "A_point": [
+   848,
+   435
+  ],
+  "A_s": 6.5,
+  "phrase": "Social Media folder",
+  "B_point": null,
+  "B_s": 5.6,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "drawer",
+  "label": "7.Shopping, Folder",
+  "A_point": [
+   616,
+   875
+  ],
+  "A_s": 6.9,
+  "phrase": "Shopping folder",
+  "B_point": null,
+  "B_s": 4.3,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "drawer",
+  "label": "Etc, Folder",
+  "A_point": [
+   383,
+   1245
+  ],
+  "A_s": 4.0,
+  "phrase": "Etc folder",
+  "B_point": null,
+  "B_s": 4.3,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "drawer",
+  "label": "Calendar",
+  "A_point": [
+   149,
+   1683
+  ],
+  "A_s": 6.3,
+  "phrase": "Calendar icon",
+  "B_point": [
+   160,
+   1609
+  ],
+  "B_s": 5.1,
+  "A_hit": true,
+  "B_hit": true
+ },
+ {
+  "screen": "drawer",
+  "label": "Contacts",
+  "A_point": [
+   849,
+   1685
+  ],
+  "A_s": 5.1,
+  "phrase": "Contacts icon",
+  "B_point": null,
+  "B_s": 4.1,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "home",
+  "label": "Phone",
+  "A_point": [
+   126,
+   2285
+  ],
+  "A_s": 3.5,
+  "phrase": "green phone icon",
+  "B_point": [
+   135,
+   2192
+  ],
+  "B_s": 3.3,
+  "A_hit": false,
+  "B_hit": true
+ },
+ {
+  "screen": "home",
+  "label": "Contacts",
+  "A_point": [
+   313,
+   2295
+  ],
+  "A_s": 4.7,
+  "phrase": "orange person icon",
+  "B_point": null,
+  "B_s": 5.6,
+  "A_hit": false,
+  "B_hit": false
+ },
+ {
+  "screen": "home",
+  "label": "Camera",
+  "A_point": [
+   500,
+   2235
+  ],
+  "A_s": 4.3,
+  "phrase": "red camera icon",
+  "B_point": null,
+  "B_s": 3.7,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "home",
+  "label": "Messages",
+  "A_point": [
+   687,
+   2250
+  ],
+  "A_s": 4.6,
+  "phrase": "blue speech bubble",
+  "B_point": null,
+  "B_s": 6.6,
+  "A_hit": true,
+  "B_hit": false
+ },
+ {
+  "screen": "home",
+  "label": "Gallery",
+  "A_point": [
+   875,
+   2230
+  ],
+  "A_s": 3.9,
+  "phrase": "pink flower icon",
+  "B_point": [
+   944,
+   2192
+  ],
+  "B_s": 3.3,
+  "A_hit": true,
+  "B_hit": true
+ }
+]

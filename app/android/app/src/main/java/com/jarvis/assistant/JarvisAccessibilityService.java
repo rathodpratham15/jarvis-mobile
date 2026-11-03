@@ -41,6 +41,8 @@ public class JarvisAccessibilityService extends AccessibilityService {
     private final List<AccessibilityNodeInfo> lastNodes = new ArrayList<>();
     /** screenshot px = real px * lastScale */
     private volatile float lastScale = 1f;
+    /** package of the last observation; an action is refused if the foreground app changed since. */
+    private volatile String lastPkg = "";
 
     public static JarvisAccessibilityService get() { return instance; }
 
@@ -62,6 +64,7 @@ public class JarvisAccessibilityService extends AccessibilityService {
         float scale = realW > MAX_SHOT_WIDTH ? (float) MAX_SHOT_WIDTH / realW : 1f;
         lastScale = scale;
 
+        lastPkg = pkg;
         if (root != null) walk(root, nodes, scale);
 
         JSONObject out = new JSONObject();
@@ -195,6 +198,7 @@ public class JarvisAccessibilityService extends AccessibilityService {
             int id = a.optInt("node", -1);
             if (id < 0 || id >= lastNodes.size()) return "tap failed: stale node " + id;
             AccessibilityNodeInfo n = lastNodes.get(id);
+            if (isStale(n)) return "tap failed: screen changed since it was observed (stale node " + id + ")";
             // Prefer a semantic click (walks up to the nearest clickable ancestor).
             for (AccessibilityNodeInfo c = n; c != null; c = c.getParent()) {
                 if (c.isClickable() && c.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return "tapped node " + id;
@@ -215,6 +219,7 @@ public class JarvisAccessibilityService extends AccessibilityService {
         if (a.has("node")) {
             int id = a.optInt("node", -1);
             if (id >= 0 && id < lastNodes.size()) target = lastNodes.get(id);
+            if (target != null && isStale(target)) return "type failed: screen changed since it was observed";
         }
         if (target == null) {
             AccessibilityNodeInfo root = getRootInActiveWindow();
@@ -262,6 +267,14 @@ public class JarvisAccessibilityService extends AccessibilityService {
         startActivity(launch);
         sleep(1200);
         return "opened " + best.loadLabel(pm);
+    }
+
+    /** True if the node no longer exists or the foreground app is not the one that was observed. */
+    private boolean isStale(AccessibilityNodeInfo n) {
+        if (!n.refresh()) return true;
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        String pkg = root != null && root.getPackageName() != null ? root.getPackageName().toString() : "";
+        return !pkg.equals(lastPkg);
     }
 
     private boolean gestureTap(int x, int y) {
