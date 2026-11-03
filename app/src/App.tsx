@@ -21,6 +21,8 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(load);
   const [showSettings, setShowSettings] = useState(!load().token);
   const [goal, setGoal] = useState("");
+  const [listening, setListening] = useState(false);
+  const [micNote, setMicNote] = useState("");
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [wake, setWake] = useState<{ running: boolean; overlay: boolean }>({ running: false, overlay: false });
   const [wakeNote, setWakeNote] = useState("");
@@ -104,8 +106,24 @@ export default function App() {
         </section>
       )}
 
-      <textarea rows={3} value={goal} placeholder="What should I do on your phone?"
-        onChange={(e) => setGoal(e.target.value)} />
+      <div className="promptbox">
+        <textarea rows={3} value={goal} placeholder={listening ? "Listening\u2026" : "Type or tap the mic and speak"}
+          onChange={(e) => setGoal(e.target.value)} />
+        {isNativeAndroid() && (
+          <button className={`mic ${listening ? "on" : ""}`} aria-label={listening ? "Stop listening" : "Speak your request"}
+            onClick={async () => {
+              if (listening) { await DeviceControl.stopListening(); return; }
+              setMicNote(""); setListening(true);
+              try {
+                const { text } = await DeviceControl.listen();
+                setGoal((g) => (g.trim() ? g.trim() + " " : "") + text);
+              } catch (e: any) {
+                setMicNote(e?.message || "Couldn't hear that.");
+              } finally { setListening(false); }
+            }}>{listening ? "\u25A0" : "\uD83C\uDF99"}</button>
+        )}
+      </div>
+      {micNote && <p className="message">{micNote}</p>}
       <div className="chips">
         {PRESETS.map((p) => <button key={p} className="chip" onClick={() => setGoal(p)}>{p}</button>)}
       </div>
