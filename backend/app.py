@@ -68,7 +68,8 @@ def assist():
     screen = ({"b64": scr["screenshot_b64"], "package": str(scr.get("package") or "")[:80],
                "text": str(scr.get("text") or "")[:1500]} if scr else None)
     return jsonify(assistant.turn(text, units=units, attachments=atts, history=hist, messaging_apps=apps,
-                                  screen=screen, now=str(p.get("now") or "")[:40], tz=str(p.get("tz") or "")[:40]))
+                                  screen=screen, now=str(p.get("now") or "")[:40], tz=str(p.get("tz") or "")[:40],
+                                  memory=[str(x)[:200] for x in (p.get("memory") or [])[:30]] if isinstance(p.get("memory"), list) else None))
 
 
 @app.post("/api/stt")
