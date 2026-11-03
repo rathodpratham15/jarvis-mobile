@@ -60,3 +60,16 @@ def test_attachments_are_sent_after_screenshot():
     content = c.last["messages"][1]["content"]
     assert [x["type"] for x in content] == ["text", "image_url", "image_url"]
     assert "attached 1 reference" in content[0]["text"]
+
+
+def test_target_phrase_is_grounded_to_coordinates():
+    from types import SimpleNamespace as NS
+    from phone_agent import PhoneAgent, PhoneObservation
+    reply = NS(choices=[NS(message=NS(content='{"action":"tap","target":"play button","reason":"start"}'))])
+    client = NS(chat=NS(completions=NS(create=lambda **kw: reply)))
+    agent = PhoneAgent(client, "m", locate=lambda b64, phrase, w, h: (540, 1200))
+    obs = PhoneObservation(1080, 2400, "com.game", [], "abc")
+    out = agent.next_action("start the game", obs, [], 1)
+    assert out["action"] == "tap" and (out["x"], out["y"]) == (540, 1200) and "target" not in out
+    none = PhoneAgent(client, "m", locate=lambda *a: None).next_action("g", obs, [], 1)
+    assert none["action"] == "fail"

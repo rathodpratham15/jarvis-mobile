@@ -31,7 +31,8 @@ Respond with EXACTLY ONE JSON object and nothing else.
 
 Actions:
   {"action":"tap","node":<id>,"reason":"..."}            # preferred: tap a listed element
-  {"action":"tap","x":<int>,"y":<int>,"reason":"..."}    # only if no listed element fits
+  {"action":"tap","target":"<short noun phrase>","reason":"..."}  # if NO listed element fits (game, canvas, custom UI): name the thing, e.g. "play button", "red heart icon". A vision model locates it.
+  {"action":"tap","x":<int>,"y":<int>,"reason":"..."}    # last resort
   {"action":"type","text":"...","node":<id optional>,"reason":"..."}
   {"action":"scroll","direction":"up|down|left|right","reason":"..."}
   {"action":"back","reason":"..."}
@@ -145,8 +146,9 @@ def validate_action(action: Optional[dict], obs: PhoneObservation) -> dict:
     if kind == "tap":
         has_node = isinstance(action.get("node"), int)
         has_xy = isinstance(action.get("x"), (int, float)) and isinstance(action.get("y"), (int, float))
-        if not (has_node or has_xy):
-            return {"action": "fail", "reason": "tap needs a node or x/y."}
+        has_target = isinstance(action.get("target"), str) and action["target"].strip() != ""
+        if not (has_node or has_xy or has_target):
+            return {"action": "fail", "reason": "tap needs a node, a target phrase or x/y."}
         if has_node and not any(n.get("id") == action["node"] for n in obs.nodes):
             return {"action": "fail", "reason": f"Unknown node {action['node']}."}
         if has_xy and not has_node and obs.width and obs.height:
@@ -178,7 +180,8 @@ def apply_safety_gate(action: dict, obs: PhoneObservation, goal: str) -> dict:
 
 
 class PhoneAgent:
-    def __init__(self, client: Any, model: str, temperature: float = 0.1, max_tokens: int = 4000):
+    def __init__(self, client: Any, model: str, temperature: float = 0.1, max_tokens: int = 4000, locate=None):
+        self._locate = locate   # injectable for tests: (b64, phrase, w, h) -> (x, y) | None
         self._client = client
         self._model = model
         self._temperature = temperature
@@ -229,7 +232,22 @@ class PhoneAgent:
             logger.exception("PhoneAgent LLM call failed")
             return {"action": "fail", "reason": f"Model call failed: {exc}"}
         action = validate_action(parse_action(raw), obs)
+        action = self._ground(action, obs)
         return apply_safety_gate(action, obs, goal)
+
+    def _ground(self, action: dict, obs: PhoneObservation) -> dict:
+        """Turn a named target into pixel coordinates with SAM 3.1."""
+        if action.get("action") != "tap" or "node" in action or "x" in action or not action.get("target"):
+            return action
+        if not obs.screenshot_b64:
+            return {"action": "fail", "reason": "Cannot locate the target without a screenshot."}
+        import sam_grounding
+        pt = self._locate(obs.screenshot_b64, action["target"], obs.width, obs.height) if self._locate else \
+            sam_grounding.tap_point(obs.screenshot_b64, action["target"], obs.width, obs.height)
+        if pt is None:
+            return {"action": "fail", "reason": f'Could not find "{action["target"]}" on screen.'}
+        return {**{k: v for k, v in action.items() if k != "target"}, "x": pt[0], "y": pt[1],
+                "reason": f'{action.get("reason", "")} (located "{action["target"]}" with SAM 3.1)'.strip()}
 
 
 def build_phone_agent() -> Optional[PhoneAgent]:
