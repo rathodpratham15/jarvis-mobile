@@ -66,6 +66,57 @@ public class DeviceControlPlugin extends Plugin {
         call.resolve();
     }
 
+    // ---- voice input for the in-app prompt box ----
+    private volatile VoiceRecorder micRecorder;
+
+    @PluginMethod
+    public void listen(PluginCall call) {
+        if (getPermissionState("mic") != PermissionState.GRANTED) {
+            requestPermissionForAlias("mic", call, "listenPermDone");
+            return;
+        }
+        startListen(call);
+    }
+
+    @PermissionCallback
+    private void listenPermDone(PluginCall call) {
+        if (getPermissionState("mic") != PermissionState.GRANTED) { call.reject("Microphone permission is required."); return; }
+        startListen(call);
+    }
+
+    private void startListen(PluginCall call) {
+        if (micRecorder != null) micRecorder.cancel();
+        WakeWordService.pause();   // free the mic from the wake-word listener
+        final android.content.Context ctx = getContext();
+        micRecorder = new VoiceRecorder(new VoiceRecorder.Listener() {
+            @Override public void onLevel(float level) { }
+            @Override public void onResult(byte[] wav) {
+                micRecorder = null;
+                if (wav == null) { WakeWordService.resume(); call.reject("Didn't catch that. Tap the mic and try again."); return; }
+                new Thread(() -> {
+                    try {
+                        JSONObject j = Http.postBytes(ctx, "/api/stt", wav, "audio/wav", 30000);
+                        String text = j.optString("text", "").trim();
+                        if (text.isEmpty()) call.reject(j.optString("error", "Didn't catch that. Tap the mic and try again."));
+                        else { JSObject r = new JSObject(); r.put("text", text); call.resolve(r); }
+                    } catch (Exception e) {
+                        call.reject("Couldn't transcribe: " + e.getMessage());
+                    } finally { WakeWordService.resume(); }
+                }, "jarvis-app-stt").start();
+            }
+        });
+        // Give the wake-word listener a moment to release the microphone.
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> { if (micRecorder != null) micRecorder.start(); }, 400);
+    }
+
+    /** Stop recording now and transcribe what was captured. */
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        VoiceRecorder r = micRecorder;
+        if (r != null) r.finish();
+        call.resolve();
+    }
+
     @PluginMethod
     public void disableWakeWord(PluginCall call) {
         getContext().startService(new Intent(getContext(), WakeWordService.class).setAction(WakeWordService.ACTION_STOP));

@@ -22,6 +22,8 @@ interface DeviceControlPlugin {
   enableWakeWord(): Promise<void>;
   disableWakeWord(): Promise<void>;
   saveConfig(cfg: { baseUrl: string; token: string; fallbackUrl?: string }): Promise<void>;
+  listen(): Promise<{ text: string }>;
+  stopListening(): Promise<void>;
   observe(opts?: { screenshot?: boolean }): Promise<Observation>;
   act(action: PhoneAction): Promise<{ result: string }>;
 }

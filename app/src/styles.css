@@ -23,3 +23,9 @@ button.ghost { background:none; border:none; font-size:20px; }
 .log li { border-left:2px solid var(--line); padding-left:8px; display:grid; }
 .log small { opacity:.55; } .log em { opacity:.7; font-style:normal; }
 .modal { position:fixed; inset:0; background:#000a; display:grid; place-items:center; padding:20px; }
+
+.promptbox { position:relative; }
+.promptbox textarea { padding-right:56px; }
+button.mic { position:absolute; right:8px; top:8px; width:42px; height:42px; border-radius:50%; padding:0; font-size:20px; }
+button.mic.on { background:var(--bad); border-color:var(--bad); animation:pulse 1s infinite; }
+@keyframes pulse { 50% { box-shadow:0 0 0 8px rgba(255,80,80,.2); } }
