@@ -1,0 +1,18 @@
+.env
+.venv/
+__pycache__/
+node_modules/
+dist/
+app/android/local.properties
+app/android/**/build/
+app/android/.gradle/
+app/android/app/src/main/assets/public/
+*.keystore
+*.jks
+.DS_Store
+
+# Vosk wake-word model (68 MB) — fetched by scripts/fetch-wake-model.sh
+app/android/app/src/main/assets/model-en-us/
+
+# backend runtime data
+backend/data/
