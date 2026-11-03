@@ -17,9 +17,20 @@ const load = (): Settings => {
   };
 };
 
+/** Trim whitespace and trailing slashes so a pasted URL always works. */
+const clean = (v: Settings): Settings => ({
+  ...v,
+  baseUrl: v.baseUrl.trim().replace(/\/+$/, ""),
+  fallbackUrl: (v.fallbackUrl ?? "").trim().replace(/\/+$/, ""),
+  token: v.token.trim(),
+});
+
 export default function App() {
   const [settings, setSettings] = useState<Settings>(load);
   const [showSettings, setShowSettings] = useState(!load().token);
+  const [draft, setDraft] = useState<Settings>(load);
+  const [saveNote, setSaveNote] = useState("");
+  const [testNote, setTestNote] = useState("");
   const [goal, setGoal] = useState("");
   const [listening, setListening] = useState(false);
   const [micNote, setMicNote] = useState("");
@@ -68,14 +79,31 @@ export default function App() {
       {showSettings && (
         <section className="card">
           <label>Backend URL
-            <input value={settings.baseUrl} onChange={(e) => save({ ...settings, baseUrl: e.target.value })} />
+            <input value={draft.baseUrl} inputMode="url" autoCapitalize="off" autoCorrect="off"
+              onChange={(e) => { setDraft({ ...draft, baseUrl: e.target.value }); setSaveNote(""); }} />
           </label>
-          <label>Backup URL (Wi-Fi)
-            <input value={settings.fallbackUrl ?? ""} onChange={(e) => save({ ...settings, fallbackUrl: e.target.value })} />
+          <label>Backup URL (optional)
+            <input value={draft.fallbackUrl ?? ""} inputMode="url" autoCapitalize="off" autoCorrect="off"
+              onChange={(e) => { setDraft({ ...draft, fallbackUrl: e.target.value }); setSaveNote(""); }} />
           </label>
           <label>Device token
-            <input type="password" value={settings.token} onChange={(e) => save({ ...settings, token: e.target.value })} />
+            <input type="password" value={draft.token}
+              onChange={(e) => { setDraft({ ...draft, token: e.target.value }); setSaveNote(""); }} />
           </label>
+          <div className="row">
+            <button className="primary" disabled={JSON.stringify(clean(draft)) === JSON.stringify(settings)}
+              onClick={() => { const c = clean(draft); setDraft(c); save(c); setSaveNote("Saved \u2713"); }}>Save</button>
+            <button onClick={async () => {
+              setTestNote("Connecting\u2026 (a sleeping server can take ~30 s)");
+              try {
+                const r = await fetch(`${clean(draft).baseUrl}/api/health`);
+                const j = await r.json();
+                setTestNote(r.ok && j.status === "ok" ? `Connected \u2713 (agent ${j.agent ? "ready" : "not configured"})` : `Server answered ${r.status}`);
+              } catch { setTestNote("Can't reach that URL. Check it and your connection."); }
+            }}>Test connection</button>
+            <span className="status">{saveNote}</span>
+          </div>
+          {testNote && <p className="message">{testNote}</p>}
         </section>
       )}
 
