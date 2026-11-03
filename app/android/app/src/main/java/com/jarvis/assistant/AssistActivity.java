@@ -54,6 +54,12 @@ public class AssistActivity extends Activity {
     private String pendingAction;            // device action awaiting the user's choice
     private JSONObject pendingArgs;
     private java.util.List<String> pendingChoices;
+    // Mission Mode: several actions from one request, run in order with one honest summary at the end.
+    private final java.util.ArrayDeque<JSONObject> missionQueue = new java.util.ArrayDeque<>();
+    private final java.util.List<String> missionFailures = new java.util.ArrayList<>();
+    private String missionSay;
+    private int missionTotal, missionDone;
+    private boolean inMission;
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
@@ -236,6 +242,7 @@ public class AssistActivity extends Activity {
                         .put("history", history)
                         .put("now", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.US).format(new java.util.Date()))
                         .put("tz", java.util.TimeZone.getDefault().getID())
+                        .put("memory", new JSONArray(Memory.all(this)))
                         .put("messaging_apps", new JSONArray(DeviceActions.messagingApps(this)));
                 if (attachment != null) body.put("attachments", new JSONArray().put(attachment));
                 JSONObject screen = ScreenContext.pointsAtScreen(goal) ? ScreenContext.forRequest() : null;
@@ -281,6 +288,16 @@ public class AssistActivity extends Activity {
             sayThen(say, true);
             return;
         }
+        if (type.equals("mission")) {
+            org.json.JSONArray steps = r.optJSONArray("steps");
+            if (steps != null && steps.length() > 0) {
+                missionQueue.clear(); missionFailures.clear();
+                for (int i = 0; i < steps.length(); i++) missionQueue.add(steps.optJSONObject(i));
+                missionTotal = steps.length(); missionDone = 0; missionSay = say; inMission = true;
+                runNextMission(goal);
+                return;
+            }
+        }
         if (type.equals("device")) {
             final String action = r.optString("action"), backendSay = say;
             final JSONObject args = r.optJSONObject("args") == null ? new JSONObject() : r.optJSONObject("args");
@@ -305,10 +322,36 @@ public class AssistActivity extends Activity {
             sayThen(q, true);
             return;
         }
+        if (inMission) {
+            missionDone++;
+            if (res.say != null) missionFailures.add(res.say);       // only failures carry a message
+            runNextMission(goal);
+            return;
+        }
         String say = res.say != null ? res.say : backendSay;
         remember(goal, say);
         showCard(null, say);
         sayThen(say, false);
+    }
+
+    private void runNextMission(String goal) {
+        JSONObject step = missionQueue.poll();
+        if (step == null) {                                           // all done: report what really happened
+            inMission = false;
+            String say = missionFailures.isEmpty() ? missionSay
+                    : (missionTotal - missionFailures.size()) + " of " + missionTotal + " done. " + String.join(" ", missionFailures);
+            remember(goal, say);
+            showCard(null, say);
+            sayThen(say, false);
+            return;
+        }
+        final String action = step.optString("action"), stepSay = step.optString("say", "Done.");
+        final JSONObject args = step.optJSONObject("args") == null ? new JSONObject() : step.optJSONObject("args");
+        showCard(null, "Step " + (missionDone + 1) + " of " + missionTotal + "\u2026");
+        new Thread(() -> {
+            DeviceActions.Result res = DeviceActions.run(this, action, args);
+            runOnUiThread(() -> afterDevice(goal, action, args, stepSay, res));
+        }, "jarvis-mission").start();
     }
 
     private void resolveChoice(String reply) {
@@ -322,7 +365,7 @@ public class AssistActivity extends Activity {
         }
         final String action = pendingAction; final JSONObject args = pendingArgs;
         pendingAction = null; pendingArgs = null; pendingChoices = null;
-        if (chosen == null) { showCard(null, "Okay, cancelled."); sayThen("Okay, cancelled.", false); return; }
+        if (chosen == null) { inMission = false; missionQueue.clear(); showCard(null, "Okay, cancelled."); sayThen("Okay, cancelled.", false); return; }
         try { args.put("contact", chosen); } catch (Exception ignored) { }
         showCard(null, "Working on it\u2026");
         new Thread(() -> {
