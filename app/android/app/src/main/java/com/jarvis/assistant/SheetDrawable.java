@@ -36,12 +36,12 @@ final class SheetDrawable extends Drawable {
 
     @Override public void draw(Canvas c) {
         RectF b = new RectF(getBounds());
-        fill.setShader(new LinearGradient(0, b.top, 0, b.bottom, 0xF50D2540, 0xFF070E18, Shader.TileMode.CLAMP));
+        fill.setShader(new LinearGradient(0, b.top, 0, b.bottom, 0xF5141414, 0xFF000000, Shader.TileMode.CLAMP));
         // Extend the rectangle below the view so the bottom corners are not rounded.
         c.drawRoundRect(new RectF(b.left, b.top, b.right, b.bottom + r), r, r, fill);
 
         glow.setShader(new LinearGradient(b.left, 0, b.right, 0,
-                new int[]{0xFF27D3FF, 0xFF7C5CFF, 0xFF27D3FF}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
+                new int[]{0xFFFFFFFF, 0xFFA3A3A3, 0xFFFFFFFF}, new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
         // Draw the glow in its own layer, then fade it out down the sides so it has no visible end.
         float fadeEnd = b.top + r + 44f * d;
         int layer = c.saveLayer(b.left, b.top, b.right, fadeEnd, null);

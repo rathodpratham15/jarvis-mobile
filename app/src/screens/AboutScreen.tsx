@@ -30,7 +30,7 @@ export function AboutScreen({ onBack }: { onBack: () => void }) {
           <div className="about-meta-card" key={k}><span className="about-meta-label">{k}</span><span className="about-meta-val">{v}</span></div>
         ))}
       </div>
-      <div style={{ background: "rgba(7,14,24,0.7)", border: "1px solid var(--border)", borderRadius: "var(--radius-control)", padding: 14, textAlign: "center" }}>
+      <div style={{ background: "rgba(0, 0, 0,0.7)", border: "1px solid var(--border)", borderRadius: "var(--radius-control)", padding: 14, textAlign: "center" }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>“Delegate a task. It figures out how to do it.”</div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
           Built for the Meta Global AI Developer Hackathon. Reasoning runs on Meta's servers; actions and contacts stay on your phone.
