@@ -27,6 +27,8 @@ final class StatusOverlay {
     private static LinearLayout buttons;
     private static ObjectAnimator pulse;
     private static Button stopBtn;
+    private static View dotView;
+    private static GradientDrawable dotShape;
 
     private static int dp(JarvisAccessibilityService s, int v) {
         return Math.round(v * s.getResources().getDisplayMetrics().density);
@@ -40,7 +42,7 @@ final class StatusOverlay {
                 WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, flags, PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        lp.y = 160;
+        lp.y = 48 * 3;   // about 48dp above the bottom edge on most phones
         return lp;
     }
 
@@ -48,46 +50,49 @@ final class StatusOverlay {
         if (root != null) return;
         root = new LinearLayout(s);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(s, 18), dp(s, 12), dp(s, 18), dp(s, 12));
+        root.setPadding(dp(s, 14), dp(s, 6), dp(s, 10), dp(s, 6));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#E6081522"));
-        bg.setCornerRadius(dp(s, 28));
-        bg.setStroke(dp(s, 1), Color.parseColor("#27D3FF"));
+        bg.setColor(Color.parseColor("#D90D2540"));
+        bg.setCornerRadius(dp(s, 24));
+        bg.setStroke(dp(s, 1), Color.parseColor("#1B3A5C"));
         root.setBackground(bg);
 
         LinearLayout row = new LinearLayout(s);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        View dot = new View(s);
+        dotView = new View(s);
+        View dot = dotView;
         GradientDrawable d = new GradientDrawable();
         d.setShape(GradientDrawable.OVAL);
         d.setColor(Color.parseColor("#27D3FF"));
+        dotShape = d;
         dot.setBackground(d);
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(s, 12), dp(s, 12));
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(s, 9), dp(s, 9));
         dl.rightMargin = dp(s, 10);
         row.addView(dot, dl);
         text = new TextView(s);
-        text.setTextColor(Color.parseColor("#CFEAFF"));
+        text.setTextColor(Color.parseColor("#E8F3FF"));
         text.setTextSize(14);
         text.setMaxWidth(dp(s, 260));
         row.addView(text);
         stopBtn = new Button(s);
-        stopBtn.setText("\u25A0 Stop");
+        stopBtn.setText("\u25A0");
         stopBtn.setAllCaps(false);
-        stopBtn.setTextColor(Color.WHITE);
-        stopBtn.setTextSize(13);
+        stopBtn.setTextColor(Color.parseColor("#E5484D"));
+        stopBtn.setTextSize(14);
+        stopBtn.setContentDescription("Stop");
         GradientDrawable sb = new GradientDrawable();
-        sb.setColor(Color.parseColor("#E5484D"));
-        sb.setCornerRadius(dp(s, 18));
+        sb.setShape(GradientDrawable.OVAL);
+        sb.setColor(Color.parseColor("#33E5484D"));
+        sb.setStroke(dp(s, 1), Color.parseColor("#E5484D"));
         stopBtn.setBackground(sb);
-        stopBtn.setPadding(dp(s, 14), 0, dp(s, 14), 0);
-        stopBtn.setMinHeight(0); stopBtn.setMinimumHeight(0);
+        stopBtn.setPadding(0, 0, 0, 0);
+        stopBtn.setMinHeight(0); stopBtn.setMinimumHeight(0); stopBtn.setMinWidth(0); stopBtn.setMinimumWidth(0);
         stopBtn.setOnClickListener(v -> {
             stopBtn.setEnabled(false);
-            stopBtn.setText("Stopping\u2026");
+            stopBtn.setAlpha(0.5f);
             AgentRunner.stop();
         });
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(s, 36));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(dp(s, 36), dp(s, 36));
         sl.leftMargin = dp(s, 12);
         row.addView(stopBtn, sl);
         root.addView(row);
@@ -120,7 +125,7 @@ final class StatusOverlay {
         H.post(() -> {
             if (stopBtn == null) return;
             stopBtn.setVisibility(visible ? View.VISIBLE : View.GONE);
-            if (visible) { stopBtn.setEnabled(true); stopBtn.setText("\u25A0 Stop"); }
+            if (visible) { stopBtn.setEnabled(true); stopBtn.setAlpha(1f); }
         });
     }
 
@@ -131,7 +136,7 @@ final class StatusOverlay {
             pulse.cancel();
             try { ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE)).removeView(root); }
             catch (IllegalArgumentException ignored) { }
-            root = null; text = null; buttons = null; stopBtn = null;
+            root = null; text = null; buttons = null; stopBtn = null; dotView = null; dotShape = null;
         });
     }
 
@@ -145,12 +150,20 @@ final class StatusOverlay {
             ensure(s);
             text.setText(prompt);
             buttons.removeAllViews();
-            Button deny = new Button(s); deny.setText("Deny");
-            Button allow = new Button(s); allow.setText("Allow");
+            if (dotShape != null) dotShape.setColor(Color.parseColor("#FBBF24"));
+            Button deny = new Button(s); deny.setText("Deny"); deny.setAllCaps(false);
+            deny.setTextColor(Color.parseColor("#E8F3FF"));
+            GradientDrawable db = new GradientDrawable(); db.setCornerRadius(dp(s, 14)); db.setColor(Color.TRANSPARENT);
+            db.setStroke(dp(s, 2), Color.parseColor("#1B3A5C")); deny.setBackground(db);
+            Button allow = new Button(s); allow.setText("Allow"); allow.setAllCaps(false);
+            allow.setTextColor(Color.parseColor("#070E18")); allow.setTypeface(null, android.graphics.Typeface.BOLD);
+            GradientDrawable ab = new GradientDrawable(); ab.setCornerRadius(dp(s, 14)); ab.setColor(Color.parseColor("#27D3FF")); allow.setBackground(ab);
             deny.setOnClickListener(v -> { latch.countDown(); });
             allow.setOnClickListener(v -> { allowed[0] = true; latch.countDown(); });
-            buttons.addView(deny);
-            buttons.addView(allow);
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(s, 96), dp(s, 44));
+            bp.leftMargin = dp(s, 8); bp.topMargin = dp(s, 6);
+            buttons.addView(deny, bp);
+            buttons.addView(allow, bp);
             buttons.setVisibility(View.VISIBLE);
             ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE))
                     .updateViewLayout(root, params(true));
@@ -160,6 +173,7 @@ final class StatusOverlay {
             JarvisAccessibilityService s = JarvisAccessibilityService.get();
             if (s == null || root == null) return;
             buttons.setVisibility(View.GONE);
+            if (dotShape != null) dotShape.setColor(Color.parseColor("#27D3FF"));
             ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE))
                     .updateViewLayout(root, params(true));
         });
