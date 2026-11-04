@@ -38,6 +38,13 @@ import java.util.ArrayList;
 public class AssistActivity extends Activity {
     private static final int REQ_MIC = 1, REQ_IMAGE = 2, REQ_CAMERA = 3, REQ_CAM_PERM = 4;
     /** Words that mean "use the camera" (not the screen): "scan this", "look at this", "take a photo", "open the camera". */
+    /** "live scan", "scan live", "live camera/view", "what am I looking at": the continuously updating camera view. */
+    private static final java.util.regex.Pattern LIVE_CUE = java.util.regex.Pattern.compile(
+            "\\b(live (scan|camera|view|mode|vision)|scan live|go live|start live|what am i looking at)\\b",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
+    /** Phrases that already say HOW to scan, so JARVIS does not need to ask: "take a photo", "use the camera". */
+    private static final java.util.regex.Pattern PHOTO_CUE = java.util.regex.Pattern.compile(
+            "\\b(take (?:a )?(?:photo|picture|pic)|photograph|(?:use|open|start) (?:the |my )?camera)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
     private static final java.util.regex.Pattern SCAN_CUE = java.util.regex.Pattern.compile(
             "\\b(scan|look(?:ing)? at|take (?:a )?(?:photo|picture|pic)|(?:use|open|start) (?:the |my )?camera)\\b",
             java.util.regex.Pattern.CASE_INSENSITIVE);
@@ -55,6 +62,7 @@ public class AssistActivity extends Activity {
     private ObjectAnimator glowPulse;
     private String attachment;
     private java.io.File cameraFile;       // where the camera app writes the photo (app cache, deleted after use)
+    private String scanChoiceGoal;        // set while we are waiting for "photo" or "live"
     private Runnable afterCameraPerm;     // what to do once the camera permission is answered
     private String pendingScanGoal;        // what the user said, re-sent together with the photo
     private boolean submitted;
@@ -165,15 +173,7 @@ public class AssistActivity extends Activity {
         plus.setImageResource(R.drawable.ic_plus);
         plus.setPadding(dp(12), dp(12), dp(12), dp(12));
         plus.setContentDescription("Attach an image");
-        plus.setOnClickListener(v -> withCameraPermission(() -> {
-            Intent pick = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*");
-            Intent chooser = Intent.createChooser(pick, "Add a photo");
-            // The camera option is offered only if the permission was granted; the gallery always works.
-            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                try { chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{captureIntent()}); } catch (Exception ignored) { }
-            }
-            startActivityForResult(chooser, REQ_IMAGE);
-        }));
+        plus.setOnClickListener(v -> openPhotoChooser());
         bar.addView(plus, new LinearLayout.LayoutParams(dp(48), dp(48)));
         View sp1 = new View(this);
         bar.addView(sp1, new LinearLayout.LayoutParams(0, 1, 1f));
@@ -297,7 +297,12 @@ public class AssistActivity extends Activity {
         orbState(ArcReactorOrbView.State.THINKING);
         AgentRunner.initTts(this);
         if (pendingAction != null) { resolveChoice(goal); return; }
-        if (attachment == null && pendingScanGoal == null && SCAN_CUE.matcher(goal).find()) { openCameraFor(goal); return; }
+        if (scanChoiceGoal != null) { answerScanChoice(goal); return; }
+        if (LIVE_CUE.matcher(goal).find()) { startLiveScan(); return; }
+        if (attachment == null && pendingScanGoal == null && SCAN_CUE.matcher(goal).find()) {
+            if (PHOTO_CUE.matcher(goal).find()) openCameraFor(goal); else offerScanChoices(goal);
+            return;
+        }
         new Thread(() -> {
             JSONObject r;
             try {
@@ -319,6 +324,83 @@ public class AssistActivity extends Activity {
             final JSONObject res = r;
             runOnUiThread(() -> handle(goal, res));
         }, "jarvis-ask").start();
+    }
+
+    private void startLiveScan() {
+        startActivity(new Intent(this, LiveScanActivity.class));
+        finish();
+    }
+
+    private void openPhotoChooser() {
+        withCameraPermission(() -> {
+            Intent pick = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*");
+            Intent chooser = Intent.createChooser(pick, "Add a photo");
+            // The camera option is offered only if the permission was granted; the gallery always works.
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                try { chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{captureIntent()}); } catch (Exception ignored) { }
+            }
+            startActivityForResult(chooser, REQ_IMAGE);
+        });
+    }
+
+    /** "Scan this": ask how, with buttons and by voice. */
+    private void offerScanChoices(String goal) {
+        scanChoiceGoal = goal;
+        submitted = false;
+        orbState(ArcReactorOrbView.State.IDLE);
+        showChoiceCard("How do you want to scan?", new String[]{"Take a photo", "Live scan", "Choose a photo"}, new Runnable[]{
+                () -> { String g = scanChoiceGoal; scanChoiceGoal = null; openCameraFor(g != null ? g : goal); },
+                () -> { scanChoiceGoal = null; startLiveScan(); },
+                () -> { scanChoiceGoal = null; submitted = false; openPhotoChooser(); }});
+        mic.setVisibility(View.VISIBLE);
+        transcript.setText("Photo or live? Tap a button, or tap the mic and say it.");
+        AgentRunner.speak("Photo, or live scan?", () -> { });      // no auto-listen: the microphone would pick up this very question
+    }
+
+    private void answerScanChoice(String reply) {
+        String r = reply.toLowerCase(java.util.Locale.ROOT), g = scanChoiceGoal;
+        if (r.matches(".*\\b(cancel|never ?mind|forget it|stop|no)\\b.*")) { scanChoiceGoal = null; showCard(null, "Okay."); sayThen("Okay.", false); return; }
+        if (r.contains("live") || r.contains("video") || r.contains("continuous")) { scanChoiceGoal = null; startLiveScan(); return; }
+        if (r.matches(".*\\b(gallery|choose|pick|library|existing|saved)\\b.*")) { scanChoiceGoal = null; submitted = false; openPhotoChooser(); return; }
+        if (r.matches(".*\\b(photo|picture|pic|camera|snap|shot|take|yes|yeah)\\b.*")) { scanChoiceGoal = null; openCameraFor(g); return; }
+        // Not understood: stay on the choices rather than guessing.
+        submitted = false;
+        mic.setVisibility(View.VISIBLE);
+        transcript.setText("Say \u201cphoto\u201d or \u201clive\u201d, or tap a button.");
+        orbState(ArcReactorOrbView.State.IDLE);
+    }
+
+    /** A card with a prompt and a row of tappable buttons. */
+    private void showChoiceCard(String title, String[] labels, Runnable[] actions) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(dp(14), dp(14), dp(14), dp(14));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#B30D2540"));
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        c.setBackground(bg);
+        c.setOnClickListener(v -> { });
+        c.addView(text(title, 16, "#FFFFFF", false));
+        LinearLayout row = new LinearLayout(this);
+        for (int i = 0; i < labels.length; i++) {
+            final Runnable act = actions[i];
+            TextView b = text(labels[i], 13, i == 1 ? "#070E18" : "#E8F3FF", i == 1);
+            b.setGravity(Gravity.CENTER);
+            GradientDrawable bb = new GradientDrawable();
+            bb.setCornerRadius(dp(22));
+            if (i == 1) bb.setColor(CYAN); else { bb.setColor(Color.parseColor("#B30D2540")); bb.setStroke(dp(1), Color.parseColor("#27D3FF")); }
+            b.setBackground(bb);
+            b.setOnClickListener(v -> act.run());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            if (i > 0) lp.leftMargin = dp(8);
+            row.addView(b, lp);
+        }
+        c.addView(row, spaced(12));
+        if (lastCard != null) col.removeView(lastCard);
+        lastCard = c;
+        col.addView(c, 0, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ((LinearLayout.LayoutParams) c.getLayoutParams()).bottomMargin = dp(8);
     }
 
     /** Android refuses to open the camera for an app that declares the permission but was never granted it, so ask first. */

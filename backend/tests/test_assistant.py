@@ -187,3 +187,14 @@ def test_long_content_is_split_into_short_speech_and_full_details():
     c = Scripted(msg("SPOKEN: A resume.\nDETAILS:\n- Jobs: A, B, C"))
     out = Assistant(c, "m").turn("read this", attachments=["IMG"])
     assert out["say"] == "A resume." and out["card"]["text"] == "- Jobs: A, B, C"
+
+
+def test_photo_turns_get_a_longer_deadline_than_plain_questions():
+    calls = []
+    class C(Scripted):
+        def with_options(self, **kw):
+            calls.append(kw)
+            return self
+    Assistant(C(msg("ok")), "m").turn("scan this", attachments=["IMG"])
+    Assistant(C(msg("ok")), "m").turn("hello there")
+    assert calls == [{"timeout": 50.0}]
