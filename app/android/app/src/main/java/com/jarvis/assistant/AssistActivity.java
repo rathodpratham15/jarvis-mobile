@@ -348,10 +348,10 @@ public class AssistActivity extends Activity {
             if (f != null && f.length() > 0) bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
             else try (InputStream in = getContentResolver().openInputStream(uri)) { bmp = BitmapFactory.decodeStream(in); }
             if (bmp == null) return false;
-            float sc = Math.min(1f, 1024f / Math.max(bmp.getWidth(), bmp.getHeight()));
+            float sc = Math.min(1f, 1800f / Math.max(bmp.getWidth(), bmp.getHeight()));   // large enough to read a full page of small print
             Bitmap scaled = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc), Math.round(bmp.getHeight() * sc), true);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            scaled.compress(Bitmap.CompressFormat.JPEG, 80, bos);
+            scaled.compress(Bitmap.CompressFormat.JPEG, 85, bos);
             attachment = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
             thumb.setImageBitmap(scaled);
             thumb.setVisibility(View.VISIBLE);
@@ -547,14 +547,28 @@ public class AssistActivity extends Activity {
         c.setOnClickListener(v -> { });
         c.addView(text(say, 18, "#FFFFFF", false));
         if (card != null) {
-            c.addView(text(card.optString("title"), 14, "#9FC4E0", false), spaced(14));
-            LinearLayout row = new LinearLayout(this);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.addView(text(card.optString("big"), 34, "#FFFFFF", false));
-            TextView sub = text(card.optString("subtitle"), 18, "#CFEAFF", false);
-            sub.setPadding(dp(16), 0, 0, 0);
-            row.addView(sub);
-            c.addView(row);
+            if (!card.optString("title").isEmpty()) c.addView(text(card.optString("title"), 14, "#9FC4E0", false), spaced(14));
+            if (!card.optString("big").isEmpty() || !card.optString("subtitle").isEmpty()) {
+                LinearLayout row = new LinearLayout(this);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.addView(text(card.optString("big"), 34, "#FFFFFF", false));
+                TextView sub = text(card.optString("subtitle"), 18, "#CFEAFF", false);
+                sub.setPadding(dp(16), 0, 0, 0);
+                row.addView(sub);
+                c.addView(row);
+            }
+            String details = card.optString("text", "");
+            if (!details.isEmpty()) {                       // long content: scrollable full text under the spoken summary
+                TextView body = text(details, 14, "#E8F3FF", false);
+                body.setLineSpacing(0, 1.15f);
+                android.widget.ScrollView sv = new android.widget.ScrollView(this);
+                sv.addView(body);
+                int maxH = Math.round(getResources().getDisplayMetrics().heightPixels * 0.38f);
+                body.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels - dp(92), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.UNSPECIFIED);
+                c.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(body.getMeasuredHeight(), maxH)));
+                ((LinearLayout.LayoutParams) sv.getLayoutParams()).topMargin = dp(10);
+            }
             JSONArray rows = card.optJSONArray("rows");
             for (int i = 0; rows != null && i < rows.length(); i++) {
                 JSONArray kv = rows.optJSONArray(i);

@@ -41,6 +41,9 @@ Camera photos:
 - If a photo is attached without a SCREEN, the user took it with the camera: "this" means what is in the photo. Say what it is, read any text, translate a sign, or answer their question about it, briefly.
 - NEVER identify a real person from their face, body or appearance, and never guess a person's name, age, ethnicity, health or private details. If asked who someone is, or to "scan this person", say you don't identify people, then describe the scene instead (setting, what they are doing, clothing, visible text such as a name badge). Never offer to look a person up or build a profile.
 - Objects, products, plants, animals, food, documents, signs and landmarks are fine to identify.
+Long text in a photo or on the screen (resume, document, article, menu, receipt, label, long chat):
+- If the user wants it read or summarized, reply in EXACTLY this format: a first line `SPOKEN: ` with one or two short sentences, then a line `DETAILS:` followed by a complete, well-organized summary covering EVERY section you can read (for a resume: name, headline, each job with company and dates, education, skills, projects). Use short lines, '-' bullets, and no other markdown. Never skip sections to be brief; if some text is unreadable, say which part.
+- For simple questions about a photo or screen, just answer briefly with no format.
 Compound requests and memory:
 - If one request contains several actions ("text Mom I'm late, set an alarm for 7 and add dinner to my calendar"), call ALL the tools in the SAME turn, in order. Put one short overall confirmation in your message content.
 - If a detail needed by an earlier step is missing, ask_user first instead of guessing.
@@ -194,6 +197,15 @@ def _spoken_weather(d: dict) -> str:
 _WEATHER_RE = re.compile(r"^(?:what(?: s|s| is)? )?(?:the )?(?:current )?(?:temp|temperature|weather)(?: like)? (?:in|at|for) ([a-z][a-z .'-]{1,40})$")
 
 
+_SPLIT = re.compile(r"^\s*SPOKEN:\s*(.+?)\s*\n+\s*DETAILS:\s*(.+)$", re.S | re.I)
+
+
+def split_spoken(text: str) -> tuple[str, Optional[str]]:
+    """'SPOKEN: short line / DETAILS: full text' -> (short line, full text). Anything else -> (text, None)."""
+    m = _SPLIT.match(text or "")
+    return (m.group(1).strip(), m.group(2).strip()) if m else ((text or "").strip(), None)
+
+
 def _weather_card(d: dict) -> dict:
     return {"title": d["place"], "big": d["temp"], "subtitle": d["condition"],
             "rows": [["High", d["high"]], ["Low", d["low"]], ["Feels like", d["feels_like"]],
@@ -259,7 +271,10 @@ class Assistant:
             m = r.choices[0].message
             calls = m.tool_calls or []
             if not calls:
-                return {"type": "answer", "say": (m.content or "").strip() or "Done.", "card": card}
+                spoken, details = split_spoken(m.content or "")
+                if details:   # long content: speak a short summary, show everything on the card
+                    card = {"title": "Details", "big": "", "subtitle": "", "rows": [], "text": details}
+                return {"type": "answer", "say": spoken or "Done.", "card": card}
             msgs.append({"role": "assistant", "content": m.content, "tool_calls": [
                 {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
                 for c in calls]})

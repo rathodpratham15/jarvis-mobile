@@ -177,3 +177,13 @@ def test_camera_photo_reaches_the_model_and_the_no_identification_rule_is_in_the
     assert any(p.get("type") == "image_url" and "PHOTOB64" in p["image_url"]["url"] for p in seen["user"])
     s = seen["system"]
     assert "NEVER identify a real person" in s and "Never offer to look a person up" in s
+
+
+def test_long_content_is_split_into_short_speech_and_full_details():
+    from assistant import split_spoken
+    say, det = split_spoken("SPOKEN: It's a resume for Pratham.\nDETAILS:\n- Experience: Acme\n- Education: Northeastern")
+    assert say == "It's a resume for Pratham." and "- Education: Northeastern" in det
+    assert split_spoken("It's a red mug.") == ("It's a red mug.", None)
+    c = Scripted(msg("SPOKEN: A resume.\nDETAILS:\n- Jobs: A, B, C"))
+    out = Assistant(c, "m").turn("read this", attachments=["IMG"])
+    assert out["say"] == "A resume." and out["card"]["text"] == "- Jobs: A, B, C"
