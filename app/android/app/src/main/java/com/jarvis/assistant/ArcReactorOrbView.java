@@ -118,7 +118,7 @@ final class ArcReactorOrbView extends View {
         float pulse = 1f + level * 0.28f;
 
         // Layer 3: aura glow
-        float ar = 60f * d * breath * pulse * flash;
+        float ar = Math.min(60f * d * breath * pulse * flash, Math.min(getWidth(), getHeight()) / 2f);   // never wider than the view, or the glow is clipped into a square
         aura.setShader(new RadialGradient(cx, cy, ar, new int[]{alpha(accent, 0x66), alpha(accent, 0x33), 0x00000000},
                 new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
         c.drawCircle(cx, cy, ar, aura);

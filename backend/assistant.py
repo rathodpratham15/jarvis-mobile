@@ -177,6 +177,19 @@ def get_datetime() -> dict:
     return {"date": n.strftime("%A, %B %d, %Y"), "time": n.strftime("%I:%M %p").lstrip("0")}
 
 
+def _spoken_weather(d: dict) -> str:
+    """Text-to-speech skips or garbles "16°C / 61°F", so the spoken line spells both units out."""
+    city = d["place"].split(",")[0]
+    m = re.search(r"(-?\d+)\s*°\s*C\s*/\s*(-?\d+)\s*°\s*F", d.get("temp", ""))
+    cond = d["condition"].lower()
+    if not m:
+        return f"It's {d['temp']} and {cond} in {city}."
+    return f"It's {m.group(1)} degrees Celsius, or {m.group(2)} degrees Fahrenheit, and {cond} in {city}."
+
+
+_WEATHER_RE = re.compile(r"^(?:what(?: s|s| is)? )?(?:the )?(?:current )?(?:temp|temperature|weather)(?: like)? (?:in|at|for) ([a-z][a-z .'-]{1,40})$")
+
+
 def _weather_card(d: dict) -> dict:
     return {"title": d["place"], "big": d["temp"], "subtitle": d["condition"],
             "rows": [["High", d["high"]], ["Low", d["low"]], ["Feels like", d["feels_like"]],
@@ -198,6 +211,15 @@ class Assistant:
             if fast:
                 return fast
         tools_impl = server_tools or {"get_weather": get_weather, "get_datetime": get_datetime}
+        if not attachments and not screen and not history:
+            wm = _WEATHER_RE.match(_norm(utterance or ""))
+            if wm:   # "temperature in Boston": call the weather tool directly, no model round-trip
+                try:
+                    res = tools_impl["get_weather"](location=wm.group(1).strip(), units=units)
+                    if "error" not in res:
+                        return {"type": "answer", "card": _weather_card(res), "say": _spoken_weather(res)}
+                except Exception:
+                    logger.exception("direct weather lookup failed; falling back to the model")
         user: list[dict] = [{"type": "text", "text": utterance}]
         if screen and screen.get("b64"):
             txt = (screen.get("text") or "")[:1500]
@@ -271,8 +293,7 @@ class Assistant:
                 if name == "get_weather" and "error" not in result:
                     card = _weather_card(result)
                     city = result["place"].split(",")[0]
-                    return {"type": "answer", "card": card,
-                            "say": f"It's {result['temp']} and {result['condition'].lower()} in {city}."}
+                    return {"type": "answer", "card": card, "say": _spoken_weather(result)}
                 msgs.append({"role": "tool", "tool_call_id": c.id, "content": json.dumps(result)})
         return {"type": "answer", "say": "Sorry, that took too many steps.", "card": card}
 
