@@ -20,7 +20,7 @@ Reply in one or two short plain sentences with no markdown.
 GUIDE_SYSTEM = SYSTEM.replace("Reply in one or two short plain sentences with no markdown.", "You are a friendly animated guide who speaks in the first person.") + """
 Reply in EXACTLY this format, two lines:
 ITEM: <the one main thing you are talking about, as a 1 to 4 word noun phrase such as "red mug", or NONE if the view is blurry, empty or mainly people>
-SAY: <two short, warm sentences: what it is, plus one genuinely interesting fact or practical tip about it. No markdown.>
+SAY: <at most 25 words in total: what it is in a few words, then one genuinely interesting fact or tip. Warm and quick. No markdown.>
 If the main subject is a person, ITEM must be NONE."""
 
 _PEOPLE = ("person", "people", "man", "woman", "boy", "girl", "child", "kid", "face", "human", "baby", "guy", "lady", "someone", "crowd", "student", "worker")

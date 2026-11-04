@@ -161,6 +161,8 @@ def tts():
     text = ((request.get_json(silent=True) or {}).get("text") or "").strip()
     if not text:
         return jsonify(error="text is required"), 400
+    if os.getenv("TTS_PAUSED", "").lower() in ("1", "true", "yes"):
+        return jsonify(error="tts paused (TTS_PAUSED is set); the phone uses its built-in voice"), 503
     try:
         audio = speech.synthesize(text)
     except Exception as exc:

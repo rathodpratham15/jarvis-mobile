@@ -17,9 +17,9 @@ import sys
 import numpy as np
 from PIL import Image, ImageFilter
 
-HEAD_CROP = (250, 10, 780, 430)                       # head area of the 1024 x 1536 base image
-MOUTH = (0.428, 0.719, 0.562, 0.752)                  # SAM 3.1 box for "mouth", fractions of HEAD_CROP
-EYES = (0.36, 0.543, 0.619, 0.626)                    # SAM 3.1 box for "eyes"
+HEAD_CROP = (256, 0, 768, 461)                        # head area of the 1024 x 1536 base image (x 25-75%, y 0-30%)
+MOUTH = (0.453, 0.521, 0.564, 0.557)                  # SAM 3.1 box for "mouth", fractions of HEAD_CROP
+EYES = (0.398, 0.389, 0.583, 0.464)                   # SAM 3.1 box for "eyes"
 OUT_H = 760                                           # sprite height in pixels
 RES = os.path.join(os.path.dirname(__file__), "..", "app", "android", "app", "src", "main", "res")
 
@@ -48,14 +48,14 @@ def align(base, var, exclude, search=10):
     """Best (dx, dy) to shift `var` onto `base`, judged on the head area outside the regions that are meant to differ."""
     x0, y0, x1, y1 = HEAD_CROP
     b = np.asarray(base.convert("L")).astype(np.float32)[y0:y1, x0:x1]
-    v = np.asarray(var.convert("L")).astype(np.float32)
+    v = np.pad(np.asarray(var.convert("L")).astype(np.float32), search, mode="edge")   # the head may touch the image edge
     mask = np.ones_like(b, dtype=bool)
     for (ex0, ey0, ex1, ey1) in exclude:
         mask[max(0, ey0 - y0):max(0, ey1 - y0), max(0, ex0 - x0):max(0, ex1 - x0)] = False
     best, bd = (0, 0), 1e18
     for dy in range(-search, search + 1):
         for dx in range(-search, search + 1):
-            s = v[y0 + dy:y1 + dy, x0 + dx:x1 + dx]
+            s = v[search + y0 + dy:search + y1 + dy, search + x0 + dx:search + x1 + dx]
             d = np.abs(s - b)[mask].mean()
             if d < bd:
                 bd, best = d, (dx, dy)
@@ -94,8 +94,8 @@ def main(src):
     os.makedirs(os.path.join(RES, "raw"), exist_ok=True)
     sprite.save(os.path.join(d, "guide_base.png"), optimize=True)
 
-    mouth_box = to_full(MOUTH, 62, 52)       # room for an open mouth, chin and cheeks
-    eyes_box = to_full(EYES, 26, 24)
+    mouth_box = to_full(MOUTH, 34, 30)       # room for an open mouth, chin and cheeks
+    eyes_box = to_full(EYES, 16, 16)
     meta = {"w": sprite.width, "h": sprite.height, "patches": {}}
 
     def place(name, box, var):
