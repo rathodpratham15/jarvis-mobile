@@ -44,7 +44,7 @@ public class AssistActivity extends Activity {
     private TextView transcript;
     private ImageView mic;
     private ImageView thumb;
-    private View glow, edgeHolder;
+    private SheetDrawable sheetBg;
     private LinearLayout sheet;
     private ArcReactorOrbView orb;
     private boolean closing;
@@ -101,33 +101,15 @@ public class AssistActivity extends Activity {
         sheet.setOrientation(LinearLayout.VERTICAL);
         sheet.setGravity(Gravity.CENTER_HORIZONTAL);
         sheet.setPadding(dp(18), dp(12), dp(18), dp(28));
-        GradientDrawable sbg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.parseColor("#F50D2540"), Color.parseColor("#FF070E18")});
-        float r = dp(28);
-        sbg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
-        sheet.setBackground(sbg);
+        sheetBg = new SheetDrawable(getResources().getDisplayMetrics().density);
+        sheet.setBackground(sheetBg);
         sheet.setOnClickListener(v -> { });                          // swallow taps so the sheet doesn't dismiss
         FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         root.addView(sheet, sl);
 
-        // Soft cyan-to-violet glow along the sheet's top edge (outside the sheet, bottom-aligned to it).
-        glow = new View(this);
-        glow.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                new int[]{Color.parseColor("#6627D3FF"), Color.TRANSPARENT}));
-        FrameLayout glowHolder = new FrameLayout(this);
-        glowHolder.setClickable(false);
-        View edge = new View(this);
-        edge.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{Color.parseColor("#0027D3FF"), Color.parseColor("#B37C5CFF"), Color.parseColor("#7327D3FF"), Color.parseColor("#0027D3FF")}));
-        glowHolder.addView(glow, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36), Gravity.BOTTOM));
-        glowHolder.addView(edge, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(2), Gravity.BOTTOM));
-        edgeHolder = glowHolder;
-        root.addView(glowHolder, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36), Gravity.BOTTOM));
-        sheet.getViewTreeObserver().addOnGlobalLayoutListener(() ->
-                glowHolder.setTranslationY(-(sheet.getHeight()) + dp(1)));
-
-        glowPulse = ObjectAnimator.ofFloat(glow, "alpha", 0.5f, 1f);
+        // The glow lives inside SheetDrawable and follows the curved corners; pulse its intensity.
+        glowPulse = ObjectAnimator.ofFloat(sheetBg, "intensity", 0.55f, 1f);
         glowPulse.setDuration(1200);
         glowPulse.setRepeatMode(ObjectAnimator.REVERSE);
         glowPulse.setRepeatCount(ObjectAnimator.INFINITE);
@@ -221,7 +203,6 @@ public class AssistActivity extends Activity {
         sheet.animate().translationY(sheet.getHeight()).setDuration(200)
                 .setInterpolator(new android.view.animation.AccelerateInterpolator())
                 .withEndAction(() -> { super.finish(); overridePendingTransition(0, 0); }).start();
-        if (edgeHolder != null) edgeHolder.animate().alpha(0f).setDuration(200).start();
     }
 
     private void orbState(ArcReactorOrbView.State s) { if (orb != null) orb.setState(s); }
