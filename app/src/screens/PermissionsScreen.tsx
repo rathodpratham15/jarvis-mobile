@@ -5,6 +5,7 @@ import { DeviceControl, isNativeAndroid, PermissionState } from "../deviceContro
 const ITEMS: { id: keyof PermissionState; name: string; desc: string }[] = [
   { id: "accessibility", name: "Accessibility service", desc: "Lets JARVIS read the screen and tap, type and scroll in other apps." },
   { id: "microphone", name: "Microphone", desc: "For “Hey Jarvis” and for speaking your requests." },
+  { id: "camera", name: "Camera", desc: "For “scan this” and live scan. Photos and frames are sent only when you scan, and are never saved." },
   { id: "contacts", name: "Contacts", desc: "Resolves names like “Mom” on this phone. Contacts are never uploaded." },
   { id: "sms", name: "SMS", desc: "Sends text messages you ask for." },
   { id: "calendar", name: "Calendar", desc: "Adds events you ask for." },

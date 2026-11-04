@@ -36,7 +36,7 @@ import java.util.ArrayList;
  * Opens (via long-press home/power) already listening; hands the request to AgentRunner and closes.
  */
 public class AssistActivity extends Activity {
-    private static final int REQ_MIC = 1, REQ_IMAGE = 2, REQ_CAMERA = 3;
+    private static final int REQ_MIC = 1, REQ_IMAGE = 2, REQ_CAMERA = 3, REQ_CAM_PERM = 4;
     /** Words that mean "use the camera" (not the screen): "scan this", "look at this", "take a photo", "open the camera". */
     private static final java.util.regex.Pattern SCAN_CUE = java.util.regex.Pattern.compile(
             "\\b(scan|look(?:ing)? at|take (?:a )?(?:photo|picture|pic)|(?:use|open|start) (?:the |my )?camera)\\b",
@@ -55,6 +55,7 @@ public class AssistActivity extends Activity {
     private ObjectAnimator glowPulse;
     private String attachment;
     private java.io.File cameraFile;       // where the camera app writes the photo (app cache, deleted after use)
+    private Runnable afterCameraPerm;     // what to do once the camera permission is answered
     private String pendingScanGoal;        // what the user said, re-sent together with the photo
     private boolean submitted;
     private boolean listening;
@@ -164,12 +165,15 @@ public class AssistActivity extends Activity {
         plus.setImageResource(R.drawable.ic_plus);
         plus.setPadding(dp(12), dp(12), dp(12), dp(12));
         plus.setContentDescription("Attach an image");
-        plus.setOnClickListener(v -> {
+        plus.setOnClickListener(v -> withCameraPermission(() -> {
             Intent pick = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*");
             Intent chooser = Intent.createChooser(pick, "Add a photo");
-            try { chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{captureIntent()}); } catch (Exception ignored) { }
+            // The camera option is offered only if the permission was granted; the gallery always works.
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                try { chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{captureIntent()}); } catch (Exception ignored) { }
+            }
             startActivityForResult(chooser, REQ_IMAGE);
-        });
+        }));
         bar.addView(plus, new LinearLayout.LayoutParams(dp(48), dp(48)));
         View sp1 = new View(this);
         bar.addView(sp1, new LinearLayout.LayoutParams(0, 1, 1f));
@@ -317,6 +321,13 @@ public class AssistActivity extends Activity {
         }, "jarvis-ask").start();
     }
 
+    /** Android refuses to open the camera for an app that declares the permission but was never granted it, so ask first. */
+    private void withCameraPermission(Runnable go) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) { go.run(); return; }
+        afterCameraPerm = go;
+        requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM_PERM);
+    }
+
     private Intent captureIntent() throws java.io.IOException {
         cameraFile = java.io.File.createTempFile("scan_", ".jpg", getCacheDir());
         Uri out = androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", cameraFile);
@@ -333,12 +344,20 @@ public class AssistActivity extends Activity {
         submitted = false;                              // the real request is sent after the photo comes back
         orbState(ArcReactorOrbView.State.IDLE);
         showCard(null, "Opening the camera\u2026 take a photo and I'll look at it.");
-        try { startActivityForResult(captureIntent(), REQ_CAMERA); }
-        catch (Exception e) {
-            pendingScanGoal = null;
-            showCard(null, "I couldn't open the camera. Tap + to choose a photo instead.");
-            mic.setVisibility(View.VISIBLE);
-        }
+        withCameraPermission(() -> {
+            if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                pendingScanGoal = null;
+                showCard(null, "I need camera access to scan. Allow it in Settings \u2192 Permissions, or tap + to choose a photo.");
+                mic.setVisibility(View.VISIBLE);
+                return;
+            }
+            try { startActivityForResult(captureIntent(), REQ_CAMERA); }
+            catch (Exception e) {
+                pendingScanGoal = null;
+                showCard(null, "I couldn't open the camera. Tap + to choose a photo instead.");
+                mic.setVisibility(View.VISIBLE);
+            }
+        });
     }
 
     /** Shrink the photo, keep it in memory only, and show a thumbnail. Returns false if it could not be read. */
@@ -624,6 +643,12 @@ public class AssistActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == REQ_CAM_PERM) {
+            Runnable go = afterCameraPerm;
+            afterCameraPerm = null;
+            if (go != null) go.run();        // the action re-checks the permission and explains if it was denied
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening();
         else transcript.setText("Microphone permission is needed to listen.");
     }

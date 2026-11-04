@@ -40,5 +40,5 @@ export const DeviceControl = registerPlugin<DeviceControlPlugin>("DeviceControl"
 export const isNativeAndroid = () => Capacitor.getPlatform() === "android";
 
 export interface PermissionState {
-  accessibility: boolean; microphone: boolean; contacts: boolean; sms: boolean; calendar: boolean; overlay: boolean;
+  accessibility: boolean; microphone: boolean; camera: boolean; contacts: boolean; sms: boolean; calendar: boolean; overlay: boolean;
 }
