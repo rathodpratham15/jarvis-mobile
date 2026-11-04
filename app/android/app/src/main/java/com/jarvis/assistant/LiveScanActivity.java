@@ -20,7 +20,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -64,6 +68,9 @@ public class LiveScanActivity extends AppCompatActivity {
     private ImageView micBtn;
     private VoiceRecorder recorder;
     private ExecutorService analysisExec;
+    private CameraControl cameraControl;
+    private volatile long lastRefocusAt;
+    private View focusRing;
 
     // Guide character (a cartoon person who pops up from the scanned item and talks about it)
     private GuideView guide;
@@ -94,6 +101,17 @@ public class LiveScanActivity extends AppCompatActivity {
         preview.setScaleType(PreviewView.ScaleType.FILL_CENTER);
         root.addView(preview, new FrameLayout.LayoutParams(-1, -1));
         rootView = root;
+        preview.setOnTouchListener((v, ev) -> {
+            if (ev.getAction() == android.view.MotionEvent.ACTION_UP) { focusAt(ev.getX(), ev.getY(), true); v.performClick(); }
+            return true;
+        });
+        focusRing = new View(this);
+        GradientDrawable fr = new GradientDrawable();
+        fr.setShape(GradientDrawable.OVAL);
+        fr.setStroke(dp(2), CYAN);
+        fr.setColor(Color.TRANSPARENT);
+        focusRing.setBackground(fr);
+        focusRing.setVisibility(View.GONE);
 
         guideLayer = new FrameLayout(this);
         guide = new GuideView(this);
@@ -109,6 +127,7 @@ public class LiveScanActivity extends AppCompatActivity {
         bubble.setVisibility(View.GONE);
         guideLayer.addView(bubble, new FrameLayout.LayoutParams(-2, -2));
         root.addView(guideLayer, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(focusRing, new FrameLayout.LayoutParams(dp(72), dp(72)));
 
         // Top bar: LIVE badge and close.
         LinearLayout top = new LinearLayout(this);
@@ -247,13 +266,55 @@ public class LiveScanActivity extends AppCompatActivity {
                     } finally { image.close(); }
                 });
                 provider.unbindAll();
-                provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, pv, analysis);
+                Camera camera = provider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, pv, analysis);
+                cameraControl = camera.getCameraControl();
+                preview.postDelayed(() -> focusAt(preview.getWidth() / 2f, preview.getHeight() / 2.2f, false), 700);
                 forceNext = true;
                 tick();
             } catch (Exception e) {
                 status.setText("Couldn't start the camera.");
             }
         }, ContextCompat.getMainExecutor(this));
+    }
+
+    /** Focus (and meter exposure) on a point of the preview. A tap shows a ring; automatic refocus stays quiet. */
+    private void focusAt(float x, float y, boolean fromTap) {
+        if (cameraControl == null || preview.getWidth() == 0) return;
+        try {
+            MeteringPoint pt = preview.getMeteringPointFactory().createPoint(x, y);
+            cameraControl.startFocusAndMetering(new FocusMeteringAction.Builder(pt,
+                    FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
+                    .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS).build());
+            lastRefocusAt = System.currentTimeMillis();
+        } catch (Exception ignored) { return; }
+        if (fromTap) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) focusRing.getLayoutParams();
+            lp.leftMargin = Math.round(x) - dp(36);
+            lp.topMargin = Math.round(y) - dp(36);
+            focusRing.setLayoutParams(lp);
+            focusRing.setVisibility(View.VISIBLE);
+            focusRing.setAlpha(1f); focusRing.setScaleX(1.5f); focusRing.setScaleY(1.5f);
+            focusRing.animate().scaleX(1f).scaleY(1f).setDuration(220).withEndAction(() ->
+                    focusRing.animate().alpha(0f).setStartDelay(500).setDuration(300).withEndAction(() -> focusRing.setVisibility(View.GONE)).start()).start();
+        }
+    }
+
+    /** Variance of the Laplacian on a small greyscale copy: high for crisp detail, low for a blurred or empty view. */
+    private static double sharpness(Bitmap b) {
+        int w = 160, h = Math.max(1, Math.round(b.getHeight() * 160f / b.getWidth()));
+        Bitmap s = Bitmap.createScaledBitmap(b, w, h, true);
+        int[] px = new int[w * h];
+        s.getPixels(px, 0, w, 0, 0, w, h);
+        s.recycle();
+        double[] g = new double[w * h];
+        for (int i = 0; i < px.length; i++) g[i] = 0.299 * Color.red(px[i]) + 0.587 * Color.green(px[i]) + 0.114 * Color.blue(px[i]);
+        double sum = 0, sum2 = 0; int n = 0;
+        for (int y = 1; y < h - 1; y++) for (int x = 1; x < w - 1; x++) {
+            double l = 4 * g[y * w + x] - g[y * w + x - 1] - g[y * w + x + 1] - g[(y - 1) * w + x] - g[(y + 1) * w + x];
+            sum += l; sum2 += l * l; n++;
+        }
+        double mean = sum / n;
+        return sum2 / n - mean * mean;
     }
 
     /** Every few seconds, ask the camera pipeline for one fresh frame (unless paused, busy or finished). */
@@ -289,6 +350,10 @@ public class LiveScanActivity extends AppCompatActivity {
 
     private void handleFrame(Bitmap bmp) {
         int[] h = hash(bmp);
+        long nowMs = System.currentTimeMillis();
+        if (sharpness(bmp) < 30 && nowMs - lastRefocusAt > 4000) {          // blurred: do what a person does and refocus
+            runOnUiThread(() -> { status.setText("Focusing\u2026"); focusAt(preview.getWidth() / 2f, preview.getHeight() / 2.2f, false); });
+        }
         boolean force = forceNext || pendingQuestion != null;
         long now = System.currentTimeMillis();
         if (!force && !changed(h, lastHash) && now - lastSentAt < FORCE_AFTER_MS) return;   // same view: do not spend a call
