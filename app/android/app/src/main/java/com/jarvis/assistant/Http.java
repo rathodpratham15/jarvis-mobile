@@ -27,6 +27,27 @@ final class Http {
         throw last != null ? last : new IOException("No backend URL configured");
     }
 
+    private static volatile long lastWarm;
+
+    /** Wake a sleeping backend (and open the TLS connection) in the background, so the first real request is not the slow one. */
+    static void warmUp(final Context ctx) {
+        final long now = System.currentTimeMillis();
+        if (now - lastWarm < 4 * 60_000L) return;
+        lastWarm = now;
+        final Context app = ctx.getApplicationContext();
+        new Thread(() -> {
+            try {
+                String base = Config.baseUrl(app);
+                if (base == null || base.trim().isEmpty()) return;
+                HttpURLConnection c = (HttpURLConnection) new URL(base.replaceAll("/$", "") + "/api/health").openConnection();
+                c.setConnectTimeout(3000);
+                c.setReadTimeout(45000);
+                c.getResponseCode();
+                c.disconnect();
+            } catch (Exception ignored) { }
+        }, "jarvis-warm").start();
+    }
+
     private static volatile HttpURLConnection current;
 
     /** Abort whatever request is in flight (used by Stop). The blocked read throws immediately. */

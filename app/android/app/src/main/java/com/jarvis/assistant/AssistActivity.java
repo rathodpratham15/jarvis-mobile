@@ -88,6 +88,7 @@ public class AssistActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         WakeWordService.pause();   // free the microphone for this panel
+        Http.warmUp(this);
         getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         setContentView(buildUi());
