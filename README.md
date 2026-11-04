@@ -13,6 +13,12 @@ Built for the **Meta Global AI Developer Hackathon** (Indie Developer track, the
 
 **Demo video:** _link added at submission_ &nbsp;·&nbsp; **Try it:** see [Try it as a judge](#try-it-as-a-judge)
 
+<p align="center">
+  <img src="docs/screenshots/panel-weather.png" alt="The Hey Jarvis panel answering a weather question" width="300">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/home.png" alt="The JARVIS app home screen" width="300">
+</p>
+
 ## How Meta's models are used
 
 | Model (Meta Model API) | Role in JARVIS |
