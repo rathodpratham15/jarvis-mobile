@@ -64,6 +64,18 @@ _SENSITIVE = re.compile(
 _GENERIC_CONFIRM = re.compile(r"^\W*(confirm|continue|next|done|ok|yes|proceed|agree|accept|approve|authori[sz]e|apply|submit)\W*$", re.I)
 _RISK_CONTEXT = re.compile(r"(\$\s?\d|₹\s?\d|€\s?\d|£\s?\d|\b(total|amount|balance|payment|pay to|recipient|send to|transfer|card number|order summary|delete|permanently)\b)", re.I)
 
+# "open the clock app": no model needed. Open it, and finish as soon as the phone reports it opened.
+_OPEN_RE = re.compile(r"^(?:please )?open (?:the )?([a-z0-9][a-z0-9 .&'+-]{0,40}?)(?: app| application)?$", re.I)
+_NOT_JUST_OPEN = re.compile(r"\b(and|then|to|in|on|search|for|with|from|scroll|play|tap|click)\b", re.I)
+
+
+def open_only_target(goal: str) -> Optional[str]:
+    m = _OPEN_RE.match((goal or "").strip().rstrip(".!? "))
+    if not m or _NOT_JUST_OPEN.search(m.group(1)):
+        return None
+    return m.group(1).strip()
+
+
 _VALID_ACTIONS = {
     "tap", "type", "scroll", "back", "home", "open_app", "wait", "done", "fail",
 }
@@ -234,6 +246,12 @@ class PhoneAgent:
 
     def next_action(self, goal: str, obs: PhoneObservation, history: list[str], step: int,
                     attachments: Optional[list[str]] = None) -> dict:
+        name = open_only_target(goal)
+        if name:
+            if step == 1 and not history:
+                return {"action": "open_app", "name": name, "reason": "opening the app you asked for"}
+            if history and re.search(r"->\s*opened\b", history[-1], re.I):
+                return {"action": "done", "result": f"Opened {name}."}
         try:
             resp = self._client.chat.completions.create(
                 model=self._model,

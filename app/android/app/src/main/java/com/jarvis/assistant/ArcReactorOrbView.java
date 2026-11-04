@@ -20,7 +20,7 @@ import android.view.animation.LinearInterpolator;
 final class ArcReactorOrbView extends View {
     enum State { IDLE, LISTENING, TRANSCRIBING, THINKING, SPEAKING, SUCCESS, ERROR }
 
-    private static final int CYAN = 0xFF27D3FF, VIOLET = 0xFF7C5CFF, GREEN = 0xFF34D399, RED = 0xFFE5484D;
+    private static final int CYAN = 0xFF27D3FF, THINK = 0xFF34D399 /* emerald */, GREEN = 0xFF4ADE80 /* success */, RED = 0xFFE5484D;
 
     private final float d;
     private final Paint aura = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -94,7 +94,7 @@ final class ArcReactorOrbView extends View {
     void setState(State s) {
         if (s == state) return;
         state = s;
-        int target = s == State.THINKING ? VIOLET : s == State.SUCCESS ? GREEN : s == State.ERROR ? RED : CYAN;
+        int target = s == State.THINKING ? THINK : s == State.SUCCESS ? GREEN : s == State.ERROR ? RED : CYAN;
         if (colorAnim != null) colorAnim.cancel();
         colorAnim = ValueAnimator.ofObject(new ArgbEvaluator(), accent, target);
         colorAnim.setDuration(350);
@@ -118,8 +118,8 @@ final class ArcReactorOrbView extends View {
         float pulse = 1f + level * 0.28f;
 
         // Layer 3: aura glow
-        float ar = 60f * d * breath * pulse * flash;
-        aura.setShader(new RadialGradient(cx, cy, ar, new int[]{alpha(accent, 0x66), alpha(VIOLET, 0x33), 0x00000000},
+        float ar = Math.min(60f * d * breath * pulse * flash, Math.min(getWidth(), getHeight()) / 2f);   // never wider than the view, or the glow is clipped into a square
+        aura.setShader(new RadialGradient(cx, cy, ar, new int[]{alpha(accent, 0x66), alpha(accent, 0x33), 0x00000000},
                 new float[]{0f, 0.5f, 1f}, Shader.TileMode.CLAMP));
         c.drawCircle(cx, cy, ar, aura);
 
@@ -147,7 +147,7 @@ final class ArcReactorOrbView extends View {
         // Layer 1: glossy core sphere
         float cr = 29f * d * flash * (1f + level * 0.12f);
         core.setShader(new RadialGradient(cx - 8f * d, cy - 8f * d, cr * 1.4f,
-                new int[]{0xFFFFFFFF, accent, state == State.THINKING ? 0xFF070E18 : 0xFF0B1C2E},
+                new int[]{0xFFFFFFFF, accent, 0xFF0B1C2E},
                 new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP));
         c.drawCircle(cx, cy, cr, core);
     }

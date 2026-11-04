@@ -27,7 +27,7 @@ def test_weather_runs_server_side_and_returns_card():
                                     "wind": "5 mph", "high": "25°", "low": "9°", "feels_like": "20°"}
     c = Scripted(msg(calls=[call("get_weather", location="Boston")]))   # only ONE model call is needed
     out = Assistant(c, "m").turn("temp in boston", server_tools={"get_weather": fake})
-    assert out["say"] == "It's 21°C / 70°F and cloudy in Boston." and out["card"]["big"] == "21°C / 70°F"
+    assert out["say"] == "It's 21 degrees Celsius, or 70 degrees Fahrenheit, and cloudy in Boston." and out["card"]["big"] == "21°C / 70°F"
 
 
 def test_alarm_is_returned_as_device_action():
@@ -145,7 +145,7 @@ def test_intro_is_instant_and_spoken_as_jarvis():
     from assistant import fastpath
     for q in ("who are you", "Introduce yourself", "hey what's your name?", "intro"):
         out = fastpath(q)
-        assert out and "introduce myself" in out["say"] and "Jarvis" in out["say"] and "J.A.R.V.I.S" not in out["say"]
+        assert out and "introduce myself" in out["say"] and "Jarvis" in out["say"] and "JARVIS" not in out["say"] and out["card"]["title"] == "JARVIS"
     assert fastpath("what is the weather who are you asking about in this long sentence of words here") is None
 
 
@@ -153,3 +153,13 @@ def test_turn_uses_fastpath_only_without_context():
     class Boom:
         chat = NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(AssertionError("model should not be called"))))
     assert Assistant(Boom(), "m").turn("set an alarm for 8 am")["action"] == "set_alarm"
+
+
+def test_direct_weather_path_skips_the_model():
+    fake = lambda location, units: {"place": "Boston, MA", "temp": "16°C / 61°F", "condition": "Overcast", "humidity": "43%",
+                                    "wind": "9 km/h", "high": "24°C / 75°F", "low": "9°C / 49°F", "feels_like": "13°C / 56°F"}
+    class Boom:
+        chat = NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(AssertionError("model should not be called"))))
+    out = Assistant(Boom(), "m").turn("What's the temperature in Boston?", server_tools={"get_weather": fake})
+    assert out["say"] == "It's 16 degrees Celsius, or 61 degrees Fahrenheit, and overcast in Boston."
+    assert out["card"]["big"] == "16°C / 61°F"

@@ -18,7 +18,7 @@ final class AgentRunner {
     private static TextToSpeech tts;
 
     static boolean isRunning() { return running; }
-    static void stop() { stopRequested = true; }
+    static void stop() { stopRequested = true; Http.cancelCurrent(); }
 
     static synchronized void start(Context ctx, String goal, String attachmentB64) {
         initTts(ctx.getApplicationContext());
@@ -29,7 +29,7 @@ final class AgentRunner {
         initTts(app);
         new Thread(() -> {
             try { loop(app, goal, attachmentB64); }
-            catch (Exception e) { finish(app, "Something went wrong: " + e.getMessage()); }
+            catch (Exception e) { finish(app, stopRequested ? "Stopped." : "Something went wrong: " + e.getMessage()); }
             finally { running = false; }
         }, "jarvis-agent").start();
     }

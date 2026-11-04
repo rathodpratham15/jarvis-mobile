@@ -43,7 +43,7 @@ Compound requests and memory:
 - remember: when the user says "remember ..." or states a lasting preference ("always WhatsApp Mom"). forget: when asked to forget something. Asked what you remember -> answer from the memory list below.
 Never claim you did something unless you called the tool. Never invent phone numbers."""
 
-INTRO = ("Hi, allow me to introduce myself. I am J.A.R.V.I.S, a virtual artificial intelligence, and I'm here to assist "
+INTRO = ("Hi, allow me to introduce myself. I am JARVIS, a virtual artificial intelligence, and I'm here to assist "
          "you with a variety of tasks as best I can, 24 hours a day, 7 days a week. Importing all preferences from "
          "home interface. Systems are now fully operational.")
 _INTRO_RE = re.compile(r"\b(who are you|what are you|introduce yourself|introduction|intro|tell me about yourself|"
@@ -67,8 +67,8 @@ def fastpath(utterance: str) -> Optional[dict]:
     if not u or len(u) > 80:
         return None
     if _INTRO_RE.search(u) and len(u.split()) <= 8:
-        return {"type": "answer", "say": INTRO.replace("J.A.R.V.I.S", "Jarvis"),
-                "card": {"title": "J.A.R.V.I.S", "subtitle": "Just A Rather Very Intelligent System", "big": "",
+        return {"type": "answer", "say": INTRO.replace("JARVIS", "Jarvis"),
+                "card": {"title": "JARVIS", "subtitle": "Just A Rather Very Intelligent System", "big": "",
                          "rows": [], "text": INTRO}}
     m = _ALARM_RE.match(u)
     if m:
@@ -177,6 +177,19 @@ def get_datetime() -> dict:
     return {"date": n.strftime("%A, %B %d, %Y"), "time": n.strftime("%I:%M %p").lstrip("0")}
 
 
+def _spoken_weather(d: dict) -> str:
+    """Text-to-speech skips or garbles "16°C / 61°F", so the spoken line spells both units out."""
+    city = d["place"].split(",")[0]
+    m = re.search(r"(-?\d+)\s*°\s*C\s*/\s*(-?\d+)\s*°\s*F", d.get("temp", ""))
+    cond = d["condition"].lower()
+    if not m:
+        return f"It's {d['temp']} and {cond} in {city}."
+    return f"It's {m.group(1)} degrees Celsius, or {m.group(2)} degrees Fahrenheit, and {cond} in {city}."
+
+
+_WEATHER_RE = re.compile(r"^(?:what(?: s|s| is)? )?(?:the )?(?:current )?(?:temp|temperature|weather)(?: like)? (?:in|at|for) ([a-z][a-z .'-]{1,40})$")
+
+
 def _weather_card(d: dict) -> dict:
     return {"title": d["place"], "big": d["temp"], "subtitle": d["condition"],
             "rows": [["High", d["high"]], ["Low", d["low"]], ["Feels like", d["feels_like"]],
@@ -198,6 +211,15 @@ class Assistant:
             if fast:
                 return fast
         tools_impl = server_tools or {"get_weather": get_weather, "get_datetime": get_datetime}
+        if not attachments and not screen and not history:
+            wm = _WEATHER_RE.match(_norm(utterance or ""))
+            if wm:   # "temperature in Boston": call the weather tool directly, no model round-trip
+                try:
+                    res = tools_impl["get_weather"](location=wm.group(1).strip(), units=units)
+                    if "error" not in res:
+                        return {"type": "answer", "card": _weather_card(res), "say": _spoken_weather(res)}
+                except Exception:
+                    logger.exception("direct weather lookup failed; falling back to the model")
         user: list[dict] = [{"type": "text", "text": utterance}]
         if screen and screen.get("b64"):
             txt = (screen.get("text") or "")[:1500]
@@ -271,8 +293,7 @@ class Assistant:
                 if name == "get_weather" and "error" not in result:
                     card = _weather_card(result)
                     city = result["place"].split(",")[0]
-                    return {"type": "answer", "card": card,
-                            "say": f"It's {result['temp']} and {result['condition'].lower()} in {city}."}
+                    return {"type": "answer", "card": card, "say": _spoken_weather(result)}
                 msgs.append({"role": "tool", "tool_call_id": c.id, "content": json.dumps(result)})
         return {"type": "answer", "say": "Sorry, that took too many steps.", "card": card}
 

@@ -82,3 +82,16 @@ def test_generic_confirm_on_money_screen_is_gated_but_not_elsewhere():
     assert out["needs_confirmation"] and "$500.00" in out["confirm_prompt"]
     plain = PhoneObservation(1080, 2400, "com.app", [{"id": 0, "text": "Confirm", "clickable": True}, {"id": 1, "text": "Welcome"}])
     assert "needs_confirmation" not in apply_safety_gate({"action": "tap", "node": 0, "reason": "next"}, plain, "g")
+
+
+def test_open_app_goal_takes_one_step_without_the_model():
+    from types import SimpleNamespace as NS
+    from phone_agent import PhoneAgent, PhoneObservation, open_only_target
+    boom = NS(chat=NS(completions=NS(create=lambda **kw: (_ for _ in ()).throw(AssertionError("model must not be called")))))
+    agent = PhoneAgent(boom, "m")
+    obs = PhoneObservation(1080, 2400, "x", [])
+    assert agent.next_action("open clock app", obs, [], 1) == {"action": "open_app", "name": "clock", "reason": "opening the app you asked for"}
+    assert agent.next_action("open clock app", obs, ["1. open_app -> opened Clock"], 2) == {"action": "done", "result": "Opened clock."}
+    assert open_only_target("Open the Google Maps app.") == "Google Maps"
+    assert open_only_target("open chrome and search the weather") is None
+    assert open_only_target("open youtube and scroll shorts") is None
