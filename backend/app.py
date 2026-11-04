@@ -10,6 +10,7 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 from assistant import build_assistant
+from vision import build_vision
 import speech
 from phone_agent import PhoneObservation, build_phone_agent
 
@@ -18,6 +19,7 @@ app = Flask(__name__)
 CORS(app, origins=["capacitor://localhost", "http://localhost", "https://localhost", "http://localhost:5173"])
 agent = build_phone_agent()
 assistant = build_assistant()
+vision = build_vision()
 TOKEN = os.getenv("JARVIS_DEVICE_TOKEN", "")
 
 
@@ -95,6 +97,23 @@ def assist():
     return jsonify(assistant.turn(text, units=units, attachments=atts, history=hist, messaging_apps=apps,
                                   screen=screen, now=str(p.get("now") or "")[:40], tz=str(p.get("tz") or "")[:40],
                                   memory=[str(x)[:200] for x in (p.get("memory") or [])[:30]] if isinstance(p.get("memory"), list) else None))
+
+
+@app.post("/api/vision")
+def vision_frame():
+    """Live scan: one camera frame (+ optional spoken question) -> a short description."""
+    if vision is None:
+        return jsonify(error="vision not configured"), 503
+    p = request.get_json(silent=True) or {}
+    img = p.get("image")
+    if not isinstance(img, str) or not img or len(img) > 2_800_000:
+        return jsonify(error="image (base64 JPEG, under ~2 MB) is required"), 400
+    try:
+        return jsonify(text=vision.describe(img, str(p.get("question") or "")[:300]))
+    except Exception as exc:   # network or model problems: tell the phone plainly, never crash the live view
+        import openai
+        net = isinstance(exc, (openai.APITimeoutError, openai.APIConnectionError))
+        return jsonify(error=str(exc)[:200], text="I can't reach Meta's servers right now." if net else "I couldn't read that frame."), 502
 
 
 @app.post("/api/stt")
