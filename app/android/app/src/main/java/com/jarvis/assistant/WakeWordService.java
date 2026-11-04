@@ -60,6 +60,7 @@ public class WakeWordService extends Service implements RecognitionListener {
     public void onCreate() {
         super.onCreate();
         instance = this;
+        Http.warmUp(this);
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= 26)
             nm.createNotificationChannel(new NotificationChannel(CHANNEL, "Hey Jarvis", NotificationManager.IMPORTANCE_LOW));

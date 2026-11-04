@@ -9,5 +9,6 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DeviceControlPlugin.class); // must precede super.onCreate
         super.onCreate(savedInstanceState);
+        Http.warmUp(this);
     }
 }
