@@ -40,6 +40,7 @@ final class AgentRunner {
             return;
         }
         StatusOverlay.show("Working on it…"); // quiet: no per-step narration
+        StatusOverlay.setStopVisible(true);
         Thread.sleep(700); // let the voice panel finish closing so we observe the real app
         List<String> history = new ArrayList<>();
         for (int step = 1; step <= MAX_STEPS; step++) {
@@ -55,6 +56,7 @@ final class AgentRunner {
             if (attachment != null) body.put("attachments", new JSONArray().put(attachment));
 
             JSONObject res = post(app, body);
+            if (stopRequested) { finish(app, "Stopped."); return; }     // user tapped Stop while the model was thinking
             if (res.has("error")) { finish(app, "Backend error: " + res.getString("error")); return; }
             JSONObject action = res.getJSONObject("action");
             String kind = action.optString("action");
@@ -68,6 +70,7 @@ final class AgentRunner {
                     return;
                 }
             }
+            if (stopRequested) { finish(app, "Stopped."); return; }
             String result = svc.act(action);
             history.add(step + ". " + kind + " -> " + result);
             Thread.sleep(700);
@@ -80,6 +83,7 @@ final class AgentRunner {
     }
 
     private static void finish(Context app, String message) {
+        StatusOverlay.setStopVisible(false);
         StatusOverlay.show(message);
         speak(message);
         try { Thread.sleep(2800); } catch (InterruptedException ignored) { }

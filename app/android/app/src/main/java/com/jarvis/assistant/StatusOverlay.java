@@ -26,6 +26,7 @@ final class StatusOverlay {
     private static TextView text;
     private static LinearLayout buttons;
     private static ObjectAnimator pulse;
+    private static Button stopBtn;
 
     private static int dp(JarvisAccessibilityService s, int v) {
         return Math.round(v * s.getResources().getDisplayMetrics().density);
@@ -69,6 +70,26 @@ final class StatusOverlay {
         text.setTextSize(14);
         text.setMaxWidth(dp(s, 260));
         row.addView(text);
+        stopBtn = new Button(s);
+        stopBtn.setText("\u25A0 Stop");
+        stopBtn.setAllCaps(false);
+        stopBtn.setTextColor(Color.WHITE);
+        stopBtn.setTextSize(13);
+        GradientDrawable sb = new GradientDrawable();
+        sb.setColor(Color.parseColor("#E5484D"));
+        sb.setCornerRadius(dp(s, 18));
+        stopBtn.setBackground(sb);
+        stopBtn.setPadding(dp(s, 14), 0, dp(s, 14), 0);
+        stopBtn.setMinHeight(0); stopBtn.setMinimumHeight(0);
+        stopBtn.setOnClickListener(v -> {
+            stopBtn.setEnabled(false);
+            stopBtn.setText("Stopping\u2026");
+            AgentRunner.stop();
+        });
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(s, 36));
+        sl.leftMargin = dp(s, 12);
+        row.addView(stopBtn, sl);
         root.addView(row);
 
         buttons = new LinearLayout(s);
@@ -82,7 +103,7 @@ final class StatusOverlay {
         pulse.setRepeatCount(ObjectAnimator.INFINITE);
         pulse.start();
 
-        ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE)).addView(root, params(false));
+        ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE)).addView(root, params(true));
     }
 
     static void show(String msg) {
@@ -94,6 +115,15 @@ final class StatusOverlay {
         });
     }
 
+    /** The Stop button is shown only while a task is running, not on the final result message. */
+    static void setStopVisible(boolean visible) {
+        H.post(() -> {
+            if (stopBtn == null) return;
+            stopBtn.setVisibility(visible ? View.VISIBLE : View.GONE);
+            if (visible) { stopBtn.setEnabled(true); stopBtn.setText("\u25A0 Stop"); }
+        });
+    }
+
     static void hide() {
         H.post(() -> {
             JarvisAccessibilityService s = JarvisAccessibilityService.get();
@@ -101,7 +131,7 @@ final class StatusOverlay {
             pulse.cancel();
             try { ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE)).removeView(root); }
             catch (IllegalArgumentException ignored) { }
-            root = null; text = null; buttons = null;
+            root = null; text = null; buttons = null; stopBtn = null;
         });
     }
 
@@ -131,7 +161,7 @@ final class StatusOverlay {
             if (s == null || root == null) return;
             buttons.setVisibility(View.GONE);
             ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE))
-                    .updateViewLayout(root, params(false));
+                    .updateViewLayout(root, params(true));
         });
         return allowed[0];
     }
