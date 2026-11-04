@@ -58,7 +58,7 @@ export function HomeScreen(p: Props) {
       <header className="home-header">
         <div className="home-brand">
           <ArcReactorLogo size={34} state={running ? "thinking" : "idle"} />
-          <span className="home-brand-title">J.A.R.V.I.S</span>
+          <span className="home-brand-title">JARVIS</span>
         </div>
         <button className="home-settings-btn touch-target" onClick={() => p.onNavigate("settings")} aria-label="Open settings"><SettingsIcon size={20} /></button>
       </header>
@@ -76,7 +76,7 @@ export function HomeScreen(p: Props) {
         <div className="first-launch-box">
           <div className="welcome-hero">
             <ArcReactorLogo size={54} state="idle" />
-            <h2 className="welcome-title">Welcome to J.A.R.V.I.S</h2>
+            <h2 className="welcome-title">Welcome to JARVIS</h2>
             <p className="welcome-desc">To operate apps for you, turn on these three things.</p>
           </div>
           <div className="first-launch-checklist">
@@ -132,7 +132,7 @@ export function HomeScreen(p: Props) {
 
       <div className="prompt-box-container">
         <textarea className="prompt-textarea" rows={3} value={goal} onChange={(e) => setGoal(e.target.value)}
-          placeholder="Tell J.A.R.V.I.S what to do…" aria-label="Command for J.A.R.V.I.S" />
+          placeholder="Tell JARVIS what to do…" aria-label="Command for JARVIS" />
         <div className="prompt-box-bottom">
           <span className="prompt-status-hint">
             {mic === "listening" ? <><span style={{ color: "var(--danger)" }}>●</span> Listening… tap to stop</>

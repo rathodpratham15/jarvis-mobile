@@ -18,12 +18,12 @@ export function AboutScreen({ onBack }: { onBack: () => void }) {
       <div className="about-hero">
         <ArcReactorLogo size={68} glow spinning state="idle" />
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--accent-cyan)", letterSpacing: "0.12em" }}>J.A.R.V.I.S</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--accent-cyan)", letterSpacing: "0.12em" }}>JARVIS</h2>
           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Just A Rather Very Intelligent System</div>
         </div>
       </div>
       <div className="about-intro-quote">
-        <p>“Hi, allow me to introduce myself. I am J.A.R.V.I.S, a virtual artificial intelligence, and I'm here to assist you with a variety of tasks as best I can, 24 hours a day, 7 days a week.”</p>
+        <p>“Hi, allow me to introduce myself. I am JARVIS, a virtual artificial intelligence, and I'm here to assist you with a variety of tasks as best I can, 24 hours a day, 7 days a week.”</p>
       </div>
       <div className="about-meta-grid">
         {meta.map(([k, v]) => (

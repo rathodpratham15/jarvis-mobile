@@ -145,7 +145,7 @@ def test_intro_is_instant_and_spoken_as_jarvis():
     from assistant import fastpath
     for q in ("who are you", "Introduce yourself", "hey what's your name?", "intro"):
         out = fastpath(q)
-        assert out and "introduce myself" in out["say"] and "Jarvis" in out["say"] and "J.A.R.V.I.S" not in out["say"]
+        assert out and "introduce myself" in out["say"] and "Jarvis" in out["say"] and "JARVIS" not in out["say"] and out["card"]["title"] == "JARVIS"
     assert fastpath("what is the weather who are you asking about in this long sentence of words here") is None
 
 

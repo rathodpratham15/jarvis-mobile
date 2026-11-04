@@ -43,7 +43,7 @@ Compound requests and memory:
 - remember: when the user says "remember ..." or states a lasting preference ("always WhatsApp Mom"). forget: when asked to forget something. Asked what you remember -> answer from the memory list below.
 Never claim you did something unless you called the tool. Never invent phone numbers."""
 
-INTRO = ("Hi, allow me to introduce myself. I am J.A.R.V.I.S, a virtual artificial intelligence, and I'm here to assist "
+INTRO = ("Hi, allow me to introduce myself. I am JARVIS, a virtual artificial intelligence, and I'm here to assist "
          "you with a variety of tasks as best I can, 24 hours a day, 7 days a week. Importing all preferences from "
          "home interface. Systems are now fully operational.")
 _INTRO_RE = re.compile(r"\b(who are you|what are you|introduce yourself|introduction|intro|tell me about yourself|"
@@ -67,8 +67,8 @@ def fastpath(utterance: str) -> Optional[dict]:
     if not u or len(u) > 80:
         return None
     if _INTRO_RE.search(u) and len(u.split()) <= 8:
-        return {"type": "answer", "say": INTRO.replace("J.A.R.V.I.S", "Jarvis"),
-                "card": {"title": "J.A.R.V.I.S", "subtitle": "Just A Rather Very Intelligent System", "big": "",
+        return {"type": "answer", "say": INTRO.replace("JARVIS", "Jarvis"),
+                "card": {"title": "JARVIS", "subtitle": "Just A Rather Very Intelligent System", "big": "",
                          "rows": [], "text": INTRO}}
     m = _ALARM_RE.match(u)
     if m:

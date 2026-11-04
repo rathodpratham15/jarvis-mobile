@@ -41,7 +41,7 @@ export const ArcReactorLogo: React.FC<ArcReactorLogoProps> = ({
         display: 'inline-block',
         verticalAlign: 'middle',
       }}
-      aria-label="J.A.R.V.I.S Arc Reactor Mark"
+      aria-label="JARVIS Arc Reactor Mark"
     >
       <defs>
         <linearGradient id={`reactorGrad-${state}`} x1="0%" y1="0%" x2="100%" y2="100%">
