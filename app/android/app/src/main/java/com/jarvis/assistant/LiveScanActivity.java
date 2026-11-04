@@ -55,6 +55,9 @@ public class LiveScanActivity extends AppCompatActivity {
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final ExecutorService trackWorker = Executors.newSingleThreadExecutor();   // follows the item without waiting on captions
+    private volatile long lastTrackAt;
+    private volatile Object[] pendingGuide;            // a newer discovery that arrived while the guide was still busy
     private final AtomicBoolean wantFrame = new AtomicBoolean(false), busy = new AtomicBoolean(false);
     private volatile boolean paused, asking, forceNext, speakAloud, summaryRequested;
     private volatile String pendingQuestion;
@@ -402,7 +405,8 @@ public class LiveScanActivity extends AppCompatActivity {
     }
 
     private void handleFrame(Bitmap bmp) {
-        if (trackItem != null) { trackFrame(bmp); return; }
+        if (trackItem != null && System.currentTimeMillis() - lastTrackAt > 1100) { lastTrackAt = System.currentTimeMillis(); trackFrame(bmp); }
+        // ...and carry on: the caption must always describe what the camera sees NOW, even while the guide finishes talking.
         int[] h = hash(bmp);
         long nowMs = System.currentTimeMillis();
         if (sharpness(bmp) < 30 && nowMs - lastRefocusAt > 4000) {          // blurred: do what a person does and refocus
@@ -454,10 +458,23 @@ public class LiveScanActivity extends AppCompatActivity {
         if (!guideOn) { if (wasQuestion) AgentRunner.speak(text, () -> { }); return; }
         String key = item == null ? null : item.toLowerCase(java.util.Locale.ROOT).trim();
         boolean newItem = key != null && !key.equals(lastGuideItem);
-        if (wasQuestion || newItem) guideSpeak(text, item, key, b64);
+        if (wasQuestion || newItem) {
+            if (guideBusy) pendingGuide = new Object[]{text, item, key, b64, System.currentTimeMillis()};   // the guide is mid-sentence: queue it
+            else guideSpeak(text, item, key, b64);
+        }
     }
 
     // ---- the guide: pops up from the item, talks about it, lip-synced ----
+
+    /** The guide has left: if a newer discovery was waiting (and is still fresh), bring the guide back for it. */
+    private void guideFree() {
+        guideBusy = false;
+        Object[] p = pendingGuide;
+        pendingGuide = null;
+        if (p != null && !isFinishing() && guideOn && System.currentTimeMillis() - (long) p[4] < 12000) {
+            guideSpeak((String) p[0], (String) p[1], (String) p[2], (String) p[3]);
+        }
+    }
 
     private void guideSpeak(String text, String item, String key, String b64) {
         if (guideBusy) return;
@@ -549,7 +566,7 @@ public class LiveScanActivity extends AppCompatActivity {
     private void trackFrame(Bitmap bmp) {
         final String item = trackItem;
         if (item == null || !trackBusy.compareAndSet(false, true)) return;
-        worker.execute(() -> {
+        trackWorker.execute(() -> {
             float[] box = null;
             try {
                 float sc = Math.min(1f, 640f / Math.max(bmp.getWidth(), bmp.getHeight()));
@@ -601,7 +618,7 @@ public class LiveScanActivity extends AppCompatActivity {
         guide.stopSpeaking();
         status.setText("Lost sight of it. Point back at it and I'll try again.");
         bubble.animate().alpha(0f).setDuration(160).withEndAction(() -> bubble.setVisibility(View.GONE)).start();
-        guide.popOut(() -> guideBusy = false);
+        guide.popOut(this::guideFree);
         lastGuideItem = null;          // if you find it again, the guide may come back
     }
 
@@ -616,7 +633,7 @@ public class LiveScanActivity extends AppCompatActivity {
             guide.setPose(GuideView.Pose.CHEER);
             main.postDelayed(() -> {
                 bubble.animate().alpha(0f).setDuration(200).withEndAction(() -> bubble.setVisibility(View.GONE)).start();
-                guide.popOut(() -> guideBusy = false);
+                guide.popOut(this::guideFree);
             }, 1600);
         });
     }
@@ -712,6 +729,7 @@ public class LiveScanActivity extends AppCompatActivity {
         if (recorder != null) recorder.cancel();
         if (analysisExec != null) analysisExec.shutdownNow();
         worker.shutdownNow();
+        trackWorker.shutdownNow();
         WakeWordService.resume();
         super.onDestroy();
     }
