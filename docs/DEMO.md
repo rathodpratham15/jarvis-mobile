@@ -19,13 +19,13 @@ assistant.
 |---|---|---|
 | 0:00 | Voice-over, one personal sentence about why you built it (**yours to write**), then: "Siri and Bixby run commands. JARVIS takes a goal and figures out how to do it." | Phone home screen, then the JARVIS app |
 | 0:15 | "Hey Jarvis, what's the temperature in Boston?" | Panel slides up, orb pulses, weather card with °C **and** °F, spoken answer |
-| 0:30 | "Hey Jarvis, set an alarm for 7 AM, text mummy on WhatsApp that I'm running late, and add dinner at 7 PM tomorrow to my calendar." | **Mission Mode:** checklist ticks off three steps, one spoken summary. Cut to the alarm, the chat and the calendar entry. |
-| 1:05 | "Hey Jarvis, remember mummy is always on WhatsApp." Then "text mummy hello." | No question about which app (on-device memory). Show the Memory screen with the entry, delete it. |
-| 1:25 | Open a chat or web page with a date. "Hey Jarvis, summarize this." Then "add this to my calendar." | Screen-aware answer from Muse Spark vision; calendar event created |
-| 1:50 | "Hey Jarvis, turn on battery saver." | Floating "Working on it" pill; the hidden agent operates Settings; spoken result |
-| 2:05 | Start a longer task ("open YouTube and scroll Shorts 5 times"), tap **Stop** in the pill. | Stops within a second or two |
-| 2:15 | Reach a send or payment-style screen and let the safety prompt appear; tap Deny. | Confirmation quotes what is on screen |
-| 2:30 | Voice-over over the architecture diagram or README: "Muse Spark reasons and sees, Muse Voice Transcribe hears, SAM 3.1 finds icon-only buttons. Contacts never leave the phone. It's open source under MIT." | README diagram, repo page |
+| 0:30 | "Hey Jarvis, set an alarm for 7 AM and text mummy on WhatsApp that I'm running late." | **Mission Mode:** the checklist ticks off the steps, one spoken summary. Cut to the alarm and the chat. |
+| 0:55 | "Hey Jarvis, scan this." Tap **Live scan**. Point at one object (a mug or a bottle) on a plain surface and tap it to focus. | The **guide pops up from the object**, talks with lip-sync and a fun fact. Pan the camera slowly: it follows. Point away: it leaves. The headline moment: Muse Image made the character, SAM 3.1 places it. |
+| 1:35 | Point at your resume and tap **Full summary**. | One spoken line, every section on the screen |
+| 1:50 | "Hey Jarvis, summarize this" on a chat, then "add this to my calendar" on a page with a date. | Screen-aware answers (keep this to about 15 seconds) |
+| 2:05 | "Hey Jarvis, turn on battery saver." Start a longer task and tap **Stop** in the pill. | The hidden agent at work; Stop works within a second or two |
+| 2:20 | Reach a send or payment-style screen and let the safety prompt appear; tap Deny. | The confirmation quotes what is on screen |
+| 2:30 | Voice-over over the architecture diagram or README: "Muse Spark reasons and sees, Muse Voice Transcribe hears, Muse Image designed the guide, SAM 3.1 places it and finds icon-only buttons. Contacts never leave the phone. It's open source under MIT." | README diagram, repo page |
 | 2:50 | "JARVIS Mobile. Delegate a task. It figures out how." | Logo, GitHub URL |
 
 ## If something fails
