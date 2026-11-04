@@ -36,7 +36,11 @@ import java.util.ArrayList;
  * Opens (via long-press home/power) already listening; hands the request to AgentRunner and closes.
  */
 public class AssistActivity extends Activity {
-    private static final int REQ_MIC = 1, REQ_IMAGE = 2;
+    private static final int REQ_MIC = 1, REQ_IMAGE = 2, REQ_CAMERA = 3;
+    /** Words that mean "use the camera" (not the screen): "scan this", "look at this", "take a photo", "open the camera". */
+    private static final java.util.regex.Pattern SCAN_CUE = java.util.regex.Pattern.compile(
+            "\\b(scan|look(?:ing)? at|take (?:a )?(?:photo|picture|pic)|(?:use|open|start) (?:the |my )?camera)\\b",
+            java.util.regex.Pattern.CASE_INSENSITIVE);
     private static final int CYAN = Color.parseColor("#27D3FF");
 
     private VoiceRecorder recorder;
@@ -50,6 +54,8 @@ public class AssistActivity extends Activity {
     private boolean closing;
     private ObjectAnimator glowPulse;
     private String attachment;
+    private java.io.File cameraFile;       // where the camera app writes the photo (app cache, deleted after use)
+    private String pendingScanGoal;        // what the user said, re-sent together with the photo
     private boolean submitted;
     private boolean listening;
     private LinearLayout col;
@@ -158,7 +164,12 @@ public class AssistActivity extends Activity {
         plus.setImageResource(R.drawable.ic_plus);
         plus.setPadding(dp(12), dp(12), dp(12), dp(12));
         plus.setContentDescription("Attach an image");
-        plus.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*"), REQ_IMAGE));
+        plus.setOnClickListener(v -> {
+            Intent pick = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*");
+            Intent chooser = Intent.createChooser(pick, "Add a photo");
+            try { chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{captureIntent()}); } catch (Exception ignored) { }
+            startActivityForResult(chooser, REQ_IMAGE);
+        });
         bar.addView(plus, new LinearLayout.LayoutParams(dp(48), dp(48)));
         View sp1 = new View(this);
         bar.addView(sp1, new LinearLayout.LayoutParams(0, 1, 1f));
@@ -282,6 +293,7 @@ public class AssistActivity extends Activity {
         orbState(ArcReactorOrbView.State.THINKING);
         AgentRunner.initTts(this);
         if (pendingAction != null) { resolveChoice(goal); return; }
+        if (attachment == null && pendingScanGoal == null && SCAN_CUE.matcher(goal).find()) { openCameraFor(goal); return; }
         new Thread(() -> {
             JSONObject r;
             try {
@@ -303,6 +315,49 @@ public class AssistActivity extends Activity {
             final JSONObject res = r;
             runOnUiThread(() -> handle(goal, res));
         }, "jarvis-ask").start();
+    }
+
+    private Intent captureIntent() throws java.io.IOException {
+        cameraFile = java.io.File.createTempFile("scan_", ".jpg", getCacheDir());
+        Uri out = androidx.core.content.FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", cameraFile);
+        return new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+                .putExtra(android.provider.MediaStore.EXTRA_OUTPUT, out)
+                .putExtra("android.intent.extras.CAMERA_FACING", 0)          // back camera
+                .putExtra("android.intent.extra.USE_FRONT_CAMERA", false)
+                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    }
+
+    /** "Scan this": open the back camera, then send the photo together with what the user said. */
+    private void openCameraFor(String goal) {
+        pendingScanGoal = goal;
+        submitted = false;                              // the real request is sent after the photo comes back
+        orbState(ArcReactorOrbView.State.IDLE);
+        showCard(null, "Opening the camera\u2026 take a photo and I'll look at it.");
+        try { startActivityForResult(captureIntent(), REQ_CAMERA); }
+        catch (Exception e) {
+            pendingScanGoal = null;
+            showCard(null, "I couldn't open the camera. Tap + to choose a photo instead.");
+            mic.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /** Shrink the photo, keep it in memory only, and show a thumbnail. Returns false if it could not be read. */
+    private boolean attachBitmapFrom(java.io.File f, Uri uri) {
+        try {
+            Bitmap bmp;
+            if (f != null && f.length() > 0) bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
+            else try (InputStream in = getContentResolver().openInputStream(uri)) { bmp = BitmapFactory.decodeStream(in); }
+            if (bmp == null) return false;
+            float sc = Math.min(1f, 1800f / Math.max(bmp.getWidth(), bmp.getHeight()));   // large enough to read a full page of small print
+            Bitmap scaled = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc), Math.round(bmp.getHeight() * sc), true);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            scaled.compress(Bitmap.CompressFormat.JPEG, 85, bos);
+            attachment = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
+            thumb.setImageBitmap(scaled);
+            thumb.setVisibility(View.VISIBLE);
+            return true;
+        } catch (Exception e) { return false; }
+        finally { if (f != null) f.delete(); }          // never leave the photo on disk
     }
 
     private void remember(String user, String assistant) {
@@ -492,14 +547,28 @@ public class AssistActivity extends Activity {
         c.setOnClickListener(v -> { });
         c.addView(text(say, 18, "#FFFFFF", false));
         if (card != null) {
-            c.addView(text(card.optString("title"), 14, "#9FC4E0", false), spaced(14));
-            LinearLayout row = new LinearLayout(this);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.addView(text(card.optString("big"), 34, "#FFFFFF", false));
-            TextView sub = text(card.optString("subtitle"), 18, "#CFEAFF", false);
-            sub.setPadding(dp(16), 0, 0, 0);
-            row.addView(sub);
-            c.addView(row);
+            if (!card.optString("title").isEmpty()) c.addView(text(card.optString("title"), 14, "#9FC4E0", false), spaced(14));
+            if (!card.optString("big").isEmpty() || !card.optString("subtitle").isEmpty()) {
+                LinearLayout row = new LinearLayout(this);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.addView(text(card.optString("big"), 34, "#FFFFFF", false));
+                TextView sub = text(card.optString("subtitle"), 18, "#CFEAFF", false);
+                sub.setPadding(dp(16), 0, 0, 0);
+                row.addView(sub);
+                c.addView(row);
+            }
+            String details = card.optString("text", "");
+            if (!details.isEmpty()) {                       // long content: scrollable full text under the spoken summary
+                TextView body = text(details, 14, "#E8F3FF", false);
+                body.setLineSpacing(0, 1.15f);
+                android.widget.ScrollView sv = new android.widget.ScrollView(this);
+                sv.addView(body);
+                int maxH = Math.round(getResources().getDisplayMetrics().heightPixels * 0.38f);
+                body.measure(View.MeasureSpec.makeMeasureSpec(getResources().getDisplayMetrics().widthPixels - dp(92), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.UNSPECIFIED);
+                c.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.min(body.getMeasuredHeight(), maxH)));
+                ((LinearLayout.LayoutParams) sv.getLayoutParams()).topMargin = dp(10);
+            }
             JSONArray rows = card.optJSONArray("rows");
             for (int i = 0; rows != null && i < rows.length(); i++) {
                 JSONArray kv = rows.optJSONArray(i);
@@ -538,20 +607,19 @@ public class AssistActivity extends Activity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
-        if (req != REQ_IMAGE || res != RESULT_OK || data == null || data.getData() == null) return;
-        try {
-            Uri uri = data.getData();
-            Bitmap bmp;
-            try (InputStream in = getContentResolver().openInputStream(uri)) { bmp = BitmapFactory.decodeStream(in); }
-            if (bmp == null) return;
-            float s = Math.min(1f, 1024f / Math.max(bmp.getWidth(), bmp.getHeight()));
-            Bitmap scaled = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * s), Math.round(bmp.getHeight() * s), true);
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            scaled.compress(Bitmap.CompressFormat.JPEG, 80, bos);
-            attachment = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
-            thumb.setImageBitmap(scaled);
-            thumb.setVisibility(View.VISIBLE);
-        } catch (Exception ignored) { }
+        if (req == REQ_CAMERA) {
+            final String goal = pendingScanGoal;
+            pendingScanGoal = null;
+            if (res == RESULT_OK && attachBitmapFrom(cameraFile, null) && goal != null) { submit(goal); return; }
+            if (cameraFile != null) cameraFile.delete();
+            showCard(null, "No photo taken. Say \u201cscan this\u201d to try again, or tap + to choose one.");
+            mic.setVisibility(View.VISIBLE);
+            return;
+        }
+        if (req != REQ_IMAGE || res != RESULT_OK) return;
+        // From the + chooser: either a picked image (data) or a fresh camera photo (written to cameraFile).
+        Uri picked = data == null ? null : data.getData();
+        if (!attachBitmapFrom(picked == null ? cameraFile : null, picked)) showCard(null, "I couldn't read that photo.");
     }
 
     @Override
