@@ -20,6 +20,7 @@ import org.json.JSONObject;
 @CapacitorPlugin(name = "DeviceControl", permissions = {
         @Permission(alias = "mic", strings = {Manifest.permission.RECORD_AUDIO}),
         @Permission(alias = "notif", strings = {"android.permission.POST_NOTIFICATIONS"}),
+        @Permission(alias = "camera", strings = {Manifest.permission.CAMERA}),
         @Permission(alias = "contacts", strings = {Manifest.permission.READ_CONTACTS}),
         @Permission(alias = "sms", strings = {Manifest.permission.SEND_SMS}),
         @Permission(alias = "calendar", strings = {Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR})
@@ -113,6 +114,7 @@ public class DeviceControlPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("accessibility", JarvisAccessibilityService.get() != null);
         r.put("microphone", granted(Manifest.permission.RECORD_AUDIO));
+        r.put("camera", granted(Manifest.permission.CAMERA));
         r.put("contacts", granted(Manifest.permission.READ_CONTACTS));
         r.put("sms", granted(Manifest.permission.SEND_SMS));
         r.put("calendar", granted(Manifest.permission.READ_CALENDAR) && granted(Manifest.permission.WRITE_CALENDAR));
@@ -126,6 +128,7 @@ public class DeviceControlPlugin extends Plugin {
         String id = call.getString("id", "");
         switch (id) {
             case "microphone": requestPermissionForAlias("mic", call, "permDone"); return;
+            case "camera": requestPermissionForAlias("camera", call, "permDone"); return;
             case "contacts": requestPermissionForAlias("contacts", call, "permDone"); return;
             case "sms": requestPermissionForAlias("sms", call, "permDone"); return;
             case "calendar": requestPermissionForAlias("calendar", call, "permDone"); return;

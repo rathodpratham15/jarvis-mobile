@@ -29,3 +29,40 @@ def test_default_prompt_and_empty_reply_fallback():
     out = Vision(f, "m").describe("IMG")
     assert "What is in view" in f.seen["messages"][1]["content"][0]["text"]
     assert "Try moving closer" in out
+
+
+def test_guide_reply_is_parsed_and_people_are_never_returned_as_items():
+    from vision import parse_guide
+    assert parse_guide("ITEM: red mug\nSAY: A mug. Fun fact: ceramic keeps heat.") == ("A mug. Fun fact: ceramic keeps heat.", "red mug")
+    assert parse_guide("ITEM: NONE\nSAY: Too dark.") == ("Too dark.", None)
+    assert parse_guide("ITEM: a woman\nSAY: A person waving.")[1] is None
+    assert parse_guide("ITEM: two people talking\nSAY: x")[1] is None
+    assert parse_guide("Just text")[0] == "Just text"
+
+
+def test_guide_mode_returns_text_and_item():
+    f = Fake(reply="ITEM: coffee mug\nSAY: That is a coffee mug. Fun fact: they hold heat well.")
+    out = Vision(f, "m").describe_guide("IMG")
+    assert out == {"text": "That is a coffee mug. Fun fact: they hold heat well.", "item": "coffee mug"}
+    assert "NEVER identify a real person" in f.seen["messages"][0]["content"]
+
+
+def test_locate_endpoint_refuses_people_and_returns_fractions(monkeypatch):
+    import app as appmod, sam_grounding
+    from sam_grounding import Box
+    monkeypatch.setattr(appmod, "TOKEN", "t")
+    c = appmod.app.test_client(); h = {"Authorization": "Bearer t"}
+    assert c.post("/api/locate", json={"image": "A", "item": "woman"}, headers=h).get_json() == {"found": False}
+    monkeypatch.setattr(sam_grounding, "locate", lambda img, item: [Box(100, 200, 300, 400, 1000, 2000, 0.9)])
+    r = c.post("/api/locate", json={"image": "A", "item": "red mug"}, headers=h).get_json()
+    assert r["found"] and (r["x1"], r["y1"], r["x2"], r["y2"]) == (0.1, 0.1, 0.3, 0.2)
+
+
+def test_full_mode_returns_spoken_line_and_details():
+    f = Fake(reply="SPOKEN: A resume for Jane.\nDETAILS:\n- Experience: Acme\n- Education: NEU")
+    out = Vision(f, "m").describe_full("IMG")
+    assert out == {"text": "A resume for Jane.", "details": "- Experience: Acme\n- Education: NEU"}
+    assert "complete, well-organized summary" in f.seen["messages"][0]["content"]
+    assert "NEVER identify a real person" in f.seen["messages"][0]["content"]
+    plain = Vision(Fake(reply="Just text."), "m").describe_full("IMG")
+    assert plain["details"] == "Just text."

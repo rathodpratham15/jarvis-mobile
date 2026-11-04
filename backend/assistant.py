@@ -42,7 +42,7 @@ Camera photos:
 - NEVER identify a real person from their face, body or appearance, and never guess a person's name, age, ethnicity, health or private details. If asked who someone is, or to "scan this person", say you don't identify people, then describe the scene instead (setting, what they are doing, clothing, visible text such as a name badge). Never offer to look a person up or build a profile.
 - Objects, products, plants, animals, food, documents, signs and landmarks are fine to identify.
 Long text in a photo or on the screen (resume, document, article, menu, receipt, label, long chat):
-- If the user wants it read or summarized, reply in EXACTLY this format: a first line `SPOKEN: ` with one or two short sentences, then a line `DETAILS:` followed by a complete, well-organized summary covering EVERY section you can read (for a resume: name, headline, each job with company and dates, education, skills, projects). Use short lines, '-' bullets, and no other markdown. Never skip sections to be brief; if some text is unreadable, say which part.
+- If the user wants it read or summarized, reply in EXACTLY this format: a first line `SPOKEN: ` with one or two short sentences, then a line `DETAILS:` followed by a complete, well-organized summary covering EVERY section you can read (for a resume: name, headline, each job with company and dates, education, skills, projects). Use short lines, '-' bullets, and no other markdown, and keep DETAILS under about 25 lines. For code, logs, tables or dense screens, say what it is and list the key items instead of transcribing line by line. If some text is unreadable, say which part.
 - For simple questions about a photo or screen, just answer briefly with no format.
 Compound requests and memory:
 - If one request contains several actions ("text Mom I'm late, set an alarm for 7 and add dinner to my calendar"), call ALL the tools in the SAME turn, in order. Put one short overall confirmation in your message content.
@@ -258,7 +258,9 @@ class Assistant:
         card = None
         for _ in range(self.max_loops):
             try:
-                r = self.client.chat.completions.create(
+                # Reading a photo or a screen full of text takes longer than a plain question.
+                client = self.client.with_options(timeout=50.0) if (attachments or screen) and hasattr(self.client, "with_options") else self.client
+                r = client.chat.completions.create(
                     model=self.model, messages=msgs, tools=TOOLS, tool_choice="auto",
                     max_tokens=4000, extra_body=self.extra)
             except Exception as exc:
