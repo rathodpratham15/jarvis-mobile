@@ -119,7 +119,7 @@ final class AgentRunner {
             int lang = t.setLanguage(Locale.US);
             android.util.Log.i(TAG, "ready engine=" + t.getDefaultEngine() + " setLanguage=" + lang);
             t.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
-                @Override public void onStart(String id) { android.util.Log.i(TAG, "started"); }
+                @Override public void onStart(String id) { android.util.Log.i(TAG, "started"); lastSpeechMs = 0; fireStart(); }
                 @Override public void onDone(String id) { fireDone(); }
                 @Override public void onError(String id) { android.util.Log.w(TAG, "utterance error"); fireDone(); }
             });
@@ -143,8 +143,29 @@ final class AgentRunner {
 
     static void speak(String s) { speak(s, null); }
 
+    /** Length in ms of the clip being played (0 when the built-in voice speaks and the length is unknown). */
+    static volatile long lastSpeechMs;
+    private static volatile Runnable pendingStart;
+
+    private static void fireStart() {
+        Runnable r = pendingStart;
+        pendingStart = null;
+        if (r != null) MAIN.post(r);
+    }
+
+    /** Like speak(s, done), but onStart runs when sound actually begins (for lip-sync). */
+    static void speak(String s, Runnable onStart, Runnable done) {
+        pendingStart = onStart;
+        speakWith(s, done);
+    }
+
     /** ElevenLabs voice via the backend; falls back to the built-in Android voice if that fails. */
     static void speak(String s, Runnable done) {
+        pendingStart = null;
+        speakWith(s, done);
+    }
+
+    private static void speakWith(String s, Runnable done) {
         pendingDone = done;
         if (done != null) MAIN.postDelayed(() -> { if (pendingDone == done) fireDone(); }, 8000L + s.length() * 120L);
         new Thread(() -> {
@@ -168,7 +189,7 @@ final class AgentRunner {
                     .setUsage(android.media.AudioAttributes.USAGE_ASSISTANT)
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build());
             player.setDataSource(f.getAbsolutePath());
-            player.setOnPreparedListener(mp -> { mp.start(); android.util.Log.i(TAG, "ElevenLabs playing"); });
+            player.setOnPreparedListener(mp -> { lastSpeechMs = mp.getDuration(); mp.start(); fireStart(); android.util.Log.i(TAG, "ElevenLabs playing"); });
             player.setOnCompletionListener(mp -> { mp.release(); player = null; fireDone(); });
             player.setOnErrorListener((mp, w, x) -> { mp.release(); player = null; speakAndroid(fallbackText); return true; });
             player.prepareAsync();

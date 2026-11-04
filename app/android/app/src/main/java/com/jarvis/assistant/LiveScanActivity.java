@@ -65,6 +65,15 @@ public class LiveScanActivity extends AppCompatActivity {
     private VoiceRecorder recorder;
     private ExecutorService analysisExec;
 
+    // Guide character (a cartoon person who pops up from the scanned item and talks about it)
+    private GuideView guide;
+    private TextView bubble, discoveriesTxt;
+    private FrameLayout guideLayer;
+    private View cardView, rootView;
+    private volatile boolean guideOn = true, guideBusy;
+    private volatile String lastGuideItem;
+    private java.util.Set<String> discoveries = new java.util.HashSet<>();
+
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     @Override
@@ -72,6 +81,7 @@ public class LiveScanActivity extends AppCompatActivity {
         super.onCreate(b);
         WakeWordService.pause();      // the microphone is needed for "Ask"
         AgentRunner.initTts(this);
+        discoveries = new java.util.HashSet<>(getSharedPreferences("jarvis_discoveries", MODE_PRIVATE).getStringSet("items", new java.util.HashSet<>()));
         setContentView(buildUi());
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera();
         else requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
@@ -83,6 +93,22 @@ public class LiveScanActivity extends AppCompatActivity {
         preview = new PreviewView(this);
         preview.setScaleType(PreviewView.ScaleType.FILL_CENTER);
         root.addView(preview, new FrameLayout.LayoutParams(-1, -1));
+        rootView = root;
+
+        guideLayer = new FrameLayout(this);
+        guide = new GuideView(this);
+        guide.setVisibility(View.GONE);
+        guideLayer.addView(guide, new FrameLayout.LayoutParams(dp(150), dp(225)));
+        bubble = label("", 14, "#FFFFFF");
+        bubble.setPadding(dp(14), dp(10), dp(14), dp(10));
+        GradientDrawable bb = new GradientDrawable();
+        bb.setCornerRadius(dp(18));
+        bb.setColor(Color.parseColor("#F20D2540"));
+        bb.setStroke(dp(1), CYAN);
+        bubble.setBackground(bb);
+        bubble.setVisibility(View.GONE);
+        guideLayer.addView(bubble, new FrameLayout.LayoutParams(-2, -2));
+        root.addView(guideLayer, new FrameLayout.LayoutParams(-1, -1));
 
         // Top bar: LIVE badge and close.
         LinearLayout top = new LinearLayout(this);
@@ -108,6 +134,9 @@ public class LiveScanActivity extends AppCompatActivity {
         liveTxt.setLetterSpacing(0.12f);
         live.addView(liveTxt);
         top.addView(live);
+        discoveriesTxt = label("\u2605 " + discoveries.size(), 13, "#FBBF24");
+        discoveriesTxt.setPadding(dp(14), 0, 0, 0);
+        top.addView(discoveriesTxt);
         top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
         ImageView close = new ImageView(this);
         close.setImageResource(R.drawable.ic_close);
@@ -154,8 +183,12 @@ public class LiveScanActivity extends AppCompatActivity {
         LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(dp(58), dp(58));
         ml.leftMargin = dp(12); ml.rightMargin = dp(12);
         row.addView(micBtn, ml);
-        speakBtn = pill("Read aloud: off");
-        speakBtn.setOnClickListener(v -> { speakAloud = !speakAloud; speakBtn.setText(speakAloud ? "Read aloud: on" : "Read aloud: off"); });
+        speakBtn = pill("Guide: on");
+        speakBtn.setOnClickListener(v -> {
+            guideOn = !guideOn;
+            speakBtn.setText(guideOn ? "Guide: on" : "Guide: off");
+            if (!guideOn) { guide.popOut(null); bubble.setVisibility(View.GONE); guideBusy = false; AgentRunner.speak(" ", () -> { }); }
+        });
         row.addView(speakBtn, new LinearLayout.LayoutParams(0, dp(46), 1f));
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = dp(14);
@@ -165,6 +198,7 @@ public class LiveScanActivity extends AppCompatActivity {
         LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
         nl.topMargin = dp(12);
         card.addView(note, nl);
+        cardView = card;
         root.addView(card, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         return root;
     }
@@ -272,26 +306,118 @@ public class LiveScanActivity extends AppCompatActivity {
                 Bitmap small = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc), Math.round(bmp.getHeight() * sc), true);
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 small.compress(Bitmap.CompressFormat.JPEG, 80, bos);
-                JSONObject body = new JSONObject().put("image", Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP));
+                final String b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
+                JSONObject body = new JSONObject().put("image", b64).put("guide", guideOn);
                 if (question != null) body.put("question", question);
                 JSONObject r = Http.post(this, "/api/vision", body, 30000);
                 final String text = r.optString("text", r.optString("error", "I couldn't read that frame."));
-                runOnUiThread(() -> showResult(text, question != null));
+                final String item = r.isNull("item") ? null : r.optString("item", null);
+                runOnUiThread(() -> showResult(text, item, b64, question != null));
             } catch (Exception e) {
                 runOnUiThread(() -> status.setText("Can't reach the server. Retrying…"));
             } finally { busy.set(false); }
         });
     }
 
-    private void showResult(String text, boolean wasQuestion) {
+    private void showResult(String text, String item, String b64, boolean wasQuestion) {
         if (isFinishing()) return;
         caption.animate().alpha(0f).setDuration(120).withEndAction(() -> {
             caption.setText(text);
             caption.animate().alpha(1f).setDuration(180).start();
         }).start();
-        status.setText(paused ? "Paused" : "Looking · updates when the view changes");
+        status.setText(paused ? "Paused" : "Looking \u00b7 updates when the view changes");
         asking = false;
-        if (wasQuestion || speakAloud) AgentRunner.speak(text, () -> { });
+        if (!guideOn) { if (wasQuestion) AgentRunner.speak(text, () -> { }); return; }
+        String key = item == null ? null : item.toLowerCase(java.util.Locale.ROOT).trim();
+        boolean newItem = key != null && !key.equals(lastGuideItem);
+        if (wasQuestion || newItem) guideSpeak(text, item, key, b64);
+    }
+
+    // ---- the guide: pops up from the item, talks about it, lip-synced ----
+
+    private void guideSpeak(String text, String item, String key, String b64) {
+        if (guideBusy) return;
+        guideBusy = true;
+        lastGuideItem = key;
+        main.postDelayed(() -> guideBusy = false, 25000);                  // safety net so the guide can never get stuck
+        if (key != null && discoveries.add(key)) {                          // a first-time discovery this device has seen
+            getSharedPreferences("jarvis_discoveries", MODE_PRIVATE).edit().putStringSet("items", new java.util.HashSet<>(discoveries)).apply();
+            discoveriesTxt.setText("\u2605 " + discoveries.size());
+            status.setText("\u2605 New discovery: " + item);
+        }
+        if (item == null) { placeGuide(null); startTalking(text); return; }
+        worker.execute(() -> {                                              // SAM 3.1: where is the item in the frame?
+            float[] box = null;
+            try {
+                JSONObject r = Http.post(this, "/api/locate", new JSONObject().put("image", b64).put("item", item), 20000);
+                if (r.optBoolean("found")) {
+                    box = new float[]{(float) r.getDouble("x1"), (float) r.getDouble("y1"), (float) r.getDouble("x2"),
+                            (float) r.getDouble("y2"), (float) r.getDouble("frame_w"), (float) r.getDouble("frame_h")};
+                }
+            } catch (Exception ignored) { }
+            final float[] fb = box;
+            runOnUiThread(() -> { if (!isFinishing()) { placeGuide(fb); startTalking(text); } });
+        });
+    }
+
+    /** Stand the guide on top of the item (or bottom-left if SAM did not find it), and pop it out of that spot. */
+    private void placeGuide(float[] box) {
+        int vw = preview.getWidth(), vh = preview.getHeight();
+        int gw = dp(150), gh = dp(225), cardTop = vh - cardView.getHeight() - dp(6), topLimit = dp(110);
+        int left, feetY;
+        boolean pointRight = true;
+        if (box != null) {
+            float fw = box[4], fh = box[5], sc = Math.max(vw / fw, vh / fh);       // FILL_CENTER crops the frame to the view
+            float ox = (fw * sc - vw) / 2f, oy = (fh * sc - vh) / 2f;
+            float x1 = box[0] * fw * sc - ox, x2 = box[2] * fw * sc - ox, y1 = box[1] * fh * sc - oy, y2 = box[3] * fh * sc - oy;
+            float cx = (x1 + x2) / 2f;
+            feetY = Math.round(y1 + (y2 - y1) * 0.22f);
+            if (feetY - gh < topLimit) feetY = Math.round(Math.max(y1 + (y2 - y1) * 0.55f, gh + topLimit));
+            feetY = Math.min(feetY, cardTop);
+            left = Math.max(dp(4), Math.min(vw - gw - dp(4), Math.round(cx - gw / 2f)));
+            pointRight = cx >= vw / 2f;
+        } else {
+            left = dp(12);
+            feetY = cardTop - dp(2);
+        }
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) guide.getLayoutParams();
+        lp.leftMargin = left;
+        lp.topMargin = Math.max(dp(60), feetY - gh);
+        guide.setLayoutParams(lp);
+        guide.pointToward(pointRight ? -1f : 1f);   // glance toward the middle of the screen
+        guide.setPose(GuideView.Pose.WAVE);
+        guide.popIn();
+        // Speech bubble on whichever side has more room; above the head if the sides are too narrow.
+        int maxW = Math.round(vw * 0.55f);
+        bubble.setMaxWidth(maxW);
+        FrameLayout.LayoutParams bl = (FrameLayout.LayoutParams) bubble.getLayoutParams();
+        int spaceRight = vw - (left + gw) - dp(8), spaceLeft = left - dp(8);
+        if (Math.max(spaceRight, spaceLeft) >= dp(140)) {
+            boolean right = spaceRight >= spaceLeft;
+            bl.width = Math.min(maxW, right ? spaceRight : spaceLeft);
+            bl.leftMargin = right ? left + gw + dp(4) : Math.max(dp(4), left - bl.width - dp(4));
+            bl.topMargin = Math.max(dp(100), lp.topMargin + dp(20));
+        } else {
+            bl.width = vw - dp(32);
+            bl.leftMargin = dp(16);
+            bl.topMargin = Math.max(dp(100), lp.topMargin - dp(78));
+        }
+        bubble.setLayoutParams(bl);
+    }
+
+    private void startTalking(String text) {
+        bubble.setText(text);
+        bubble.setAlpha(0f);
+        bubble.setVisibility(View.VISIBLE);
+        bubble.animate().alpha(1f).setStartDelay(260).setDuration(220).start();
+        AgentRunner.speak(text, () -> guide.speak(text, AgentRunner.lastSpeechMs), () -> {
+            guide.stopSpeaking();
+            guide.setPose(GuideView.Pose.CHEER);
+            main.postDelayed(() -> {
+                bubble.animate().alpha(0f).setDuration(200).withEndAction(() -> bubble.setVisibility(View.GONE)).start();
+                guide.popOut(() -> guideBusy = false);
+            }, 1600);
+        });
     }
 
     // ---- controls ----
@@ -348,6 +474,7 @@ public class LiveScanActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         main.removeCallbacksAndMessages(null);
+        guide.stopSpeaking();
         if (recorder != null) recorder.cancel();
         if (analysisExec != null) analysisExec.shutdownNow();
         worker.shutdownNow();

@@ -109,11 +109,35 @@ def vision_frame():
     if not isinstance(img, str) or not img or len(img) > 2_800_000:
         return jsonify(error="image (base64 JPEG, under ~2 MB) is required"), 400
     try:
-        return jsonify(text=vision.describe(img, str(p.get("question") or "")[:300]))
+        q = str(p.get("question") or "")[:300]
+        if p.get("guide"):          # animated guide: friendly line plus the main item's name (never a person)
+            return jsonify(**vision.describe_guide(img, q))
+        return jsonify(text=vision.describe(img, q))
     except Exception as exc:   # network or model problems: tell the phone plainly, never crash the live view
         import openai
         net = isinstance(exc, (openai.APITimeoutError, openai.APIConnectionError))
         return jsonify(error=str(exc)[:200], text="I can't reach Meta's servers right now." if net else "I couldn't read that frame."), 502
+
+
+@app.post("/api/locate")
+def locate_item():
+    """Where is the named item in this frame? Returns its box as fractions of the frame (SAM 3.1). Never locates people."""
+    p = request.get_json(silent=True) or {}
+    img, item = p.get("image"), str(p.get("item") or "").strip()[:60]
+    if not isinstance(img, str) or not img or len(img) > 2_800_000 or not item:
+        return jsonify(error="image and item are required"), 400
+    from vision import parse_guide
+    if parse_guide(f"ITEM: {item}\nSAY: x")[1] is None:
+        return jsonify(found=False)
+    import sam_grounding
+    try:
+        boxes = sam_grounding.locate(img, item)
+    except Exception as exc:
+        return jsonify(found=False, error=str(exc)[:120])
+    if not boxes:
+        return jsonify(found=False)
+    b = boxes[0]
+    return jsonify(found=True, x1=b.x1 / b.w, y1=b.y1 / b.h, x2=b.x2 / b.w, y2=b.y2 / b.h, frame_w=b.w, frame_h=b.h)
 
 
 @app.post("/api/stt")
