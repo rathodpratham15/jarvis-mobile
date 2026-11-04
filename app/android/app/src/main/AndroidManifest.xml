@@ -103,6 +103,7 @@
 
     <!-- Android 11+ package visibility so open_app can find launchable apps -->
     <queries>
+        <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

@@ -163,3 +163,17 @@ def test_direct_weather_path_skips_the_model():
     out = Assistant(Boom(), "m").turn("What's the temperature in Boston?", server_tools={"get_weather": fake})
     assert out["say"] == "It's 16 degrees Celsius, or 61 degrees Fahrenheit, and overcast in Boston."
     assert out["card"]["big"] == "16°C / 61°F"
+
+
+def test_camera_photo_reaches_the_model_and_the_no_identification_rule_is_in_the_prompt():
+    seen = {}
+    class Spy(Scripted):
+        def _create(self, **kw):
+            seen["system"] = kw["messages"][0]["content"]
+            seen["user"] = kw["messages"][-1]["content"]
+            return super()._create(**kw)
+    out = Assistant(Spy(msg("It's a red mug.")), "m").turn("scan this", attachments=["PHOTOB64"])
+    assert out["say"] == "It's a red mug."
+    assert any(p.get("type") == "image_url" and "PHOTOB64" in p["image_url"]["url"] for p in seen["user"])
+    s = seen["system"]
+    assert "NEVER identify a real person" in s and "Never offer to look a person up" in s
