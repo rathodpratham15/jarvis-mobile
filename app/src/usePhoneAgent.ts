@@ -18,7 +18,13 @@ export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => P
   const [steps, setSteps] = useState<Step[]>([]);
   const [message, setMessage] = useState("");
   const stopRef = useRef(false);
-  const stop = useCallback(() => { stopRef.current = true; }, []);
+  const abortRef = useRef<AbortController | null>(null);
+  // Stop works immediately: it cancels the in-flight model request and the UI flips to "stopped" at once.
+  const stop = useCallback(() => {
+    stopRef.current = true;
+    abortRef.current?.abort();
+    setMessage("Stopped."); setStatus("stopped");
+  }, []);
 
   const run = useCallback(async (goal: string) => {
     stopRef.current = false;
@@ -31,12 +37,15 @@ export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => P
       for (let step = 1; step <= MAX_STEPS; step++) {
         if (stopRef.current) { setStatus("stopped"); setMessage("Stopped."); return; }
         const observation = await DeviceControl.observe({ screenshot: true });
+        const ctl = new AbortController();
+        abortRef.current = ctl;
         const res = await fetch(`${settings.baseUrl.replace(/\/$/, "")}/api/phone/step`, {
-          method: "POST",
+          method: "POST", signal: ctl.signal,
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${settings.token}` },
           body: JSON.stringify({ goal, step, history, observation }),
         });
         const data = await res.json().catch(() => ({}));
+        if (stopRef.current) return;                       // stopped while the model was thinking: do nothing more
         if (!res.ok) throw new Error(data.error || `backend ${res.status}`);
         const action: PhoneAction = data.action;
 
@@ -49,6 +58,7 @@ export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => P
         if (action.needs_confirmation && !(await confirm(action.confirm_prompt ?? "Allow this action?"))) {
           setMessage("Cancelled before a sensitive action."); setStatus("stopped"); return;
         }
+        if (stopRef.current) return;
         const { result } = await DeviceControl.act(action);
         history.push(`${step}. ${describe(action)} -> ${result}`);
         setSteps((s) => [...s, { step, action, result }]);
@@ -56,6 +66,7 @@ export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => P
       }
       setMessage("Reached the step limit."); setStatus("failed");
     } catch (e) {
+      if (stopRef.current) return;                       // the abort we caused, not a failure
       setMessage(e instanceof Error ? e.message : String(e)); setStatus("failed");
     }
   }, [settings, confirm]);

@@ -18,16 +18,29 @@ final class Http {
 
     private static Resp exec(Context ctx, String path, byte[] body, String contentType, int readTimeoutMs) throws IOException {
         IOException last = null;
+        aborted = false;
         for (String base : new String[]{Config.baseUrl(ctx), Config.fallbackUrl(ctx)}) {
             if (base == null || base.trim().isEmpty()) continue;
             try { return execTo(ctx, base, path, body, contentType, readTimeoutMs); }
-            catch (IOException e) { last = e; }   // unreachable -> try the next URL
+            catch (IOException e) { last = e; if (aborted) throw e; }   // unreachable -> try the next URL, unless the user pressed Stop
         }
         throw last != null ? last : new IOException("No backend URL configured");
     }
 
+    private static volatile HttpURLConnection current;
+
+    /** Abort whatever request is in flight (used by Stop). The blocked read throws immediately. */
+    private static volatile boolean aborted;
+
+    static void cancelCurrent() {
+        aborted = true;
+        HttpURLConnection c = current;
+        if (c != null) { try { c.disconnect(); } catch (Exception ignored) { } }
+    }
+
     private static Resp execTo(Context ctx, String base, String path, byte[] body, String contentType, int readTimeoutMs) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(base.replaceAll("/$", "") + path).openConnection();
+        current = c;
         c.setConnectTimeout(3000);
         c.setReadTimeout(readTimeoutMs);
         c.setRequestMethod("POST");
