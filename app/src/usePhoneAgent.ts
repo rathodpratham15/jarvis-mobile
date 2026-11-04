@@ -12,6 +12,13 @@ const describe = (a: PhoneAction) =>
   [a.action, a.node !== undefined && `node=${a.node}`, a.text && `"${a.text}"`, a.name, a.direction]
     .filter(Boolean).join(" ");
 
+/** "open the clock app" -> "clock". Plain open requests need no model and no screen reading. */
+export function openOnlyTarget(goal: string): string | null {
+  const m = goal.trim().replace(/[.!? ]+$/, "").match(/^(?:please )?open (?:the )?([a-z0-9][a-z0-9 .&'+-]{0,40}?)(?: app| application)?$/i);
+  if (!m || /\b(and|then|to|in|on|search|for|with|from|scroll|play|tap|click)\b/i.test(m[1])) return null;
+  return m[1].trim();
+}
+
 /** observe → backend decides → act, until done/fail. Risky actions go through `confirm`. */
 export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => Promise<boolean>) {
   const [status, setStatus] = useState<Status>("idle");
@@ -30,6 +37,17 @@ export function usePhoneAgent(settings: Settings, confirm: (prompt: string) => P
     stopRef.current = false;
     setSteps([]); setMessage(""); setStatus("running");
     const history: string[] = [];
+    const quick = openOnlyTarget(goal);
+    if (quick) {                                   // instant path: open it now, do not press Home first
+      try {
+        const { result } = await DeviceControl.act({ action: "open_app", name: quick });
+        const opened = /^opened/i.test(result);
+        setSteps([{ step: 1, action: { action: "open_app", name: quick }, result }]);
+        setMessage(opened ? `Opened ${quick}.` : result); setStatus(opened ? "done" : "failed");
+        if (opened) return;                        // if the name did not match an app, fall through to the full agent
+      } catch (e) { /* fall through to the full agent */ }
+      setSteps([]); setMessage(""); setStatus("running");
+    }
     // Leave our own UI first so the agent observes the target app, not this screen.
     try {
       await DeviceControl.act({ action: "home" });

@@ -41,10 +41,17 @@ def tts_chars_left() -> int:
     return max(0, int(os.getenv("ELEVENLABS_DAILY_CHARS", "3000")) - _read_used())
 
 
+KEYWORDS = ["JARVIS", "Hey Jarvis", "WhatsApp", "YouTube", "Chrome", "Clock", "Gmail", "Spotify", "Instagram",
+            "Google Maps", "Camera", "Settings", "Messages", "Calendar", "battery saver", "alarm", "timer"]
+
+
 def transcribe(wav: bytes) -> str:
     """WAV (mono, 16-bit PCM, 16/24 kHz) -> transcript via Meta's REST ASR endpoint."""
     base = os.getenv("META_API_BASE_URL", "https://api.meta.ai/v1").rstrip("/")
-    settings = {"mode": "PUSH_TO_TALK", "model": "muse-voice-transcribe-1.0", "audioEncoding": "WAV"}
+    # languageBias is a hint, not a lock: without it the model auto-detects and can write Hindi script for accented English.
+    langs = [x.strip() for x in os.getenv("STT_LANGUAGES", "English").split(",") if x.strip()]
+    settings = {"mode": "PUSH_TO_TALK", "model": "muse-voice-transcribe-1.0", "audioEncoding": "WAV",
+                "languageBias": langs, "keywords": KEYWORDS}
     r = httpx.post(
         f"{base}/asr/transcribe",
         headers={"Authorization": f"Bearer {os.getenv('META_API_KEY', '')}", "Accept": "application/json"},
