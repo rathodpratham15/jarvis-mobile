@@ -2,43 +2,77 @@ package com.jarvis.assistant;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.RectF;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 import android.view.animation.OvershootInterpolator;
 
+import org.json.JSONObject;
+
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
- * The JARVIS guide: a friendly cartoon person (hoodie with an arc-reactor emblem, cyan headset) drawn in code.
- * It stands, breathes and blinks; when it speaks the mouth follows the words; it can wave, point and cheer.
- * Everything is drawn in a 200 x 300 unit space and scaled to the view. It is a cartoon, not a real person's likeness.
+ * The JARVIS guide. The character was designed and edited by Meta's Muse Image model (one base picture plus edited
+ * mouth shapes and a blink); see docs/GUIDE_CHARACTER.md. Only small face patches are swapped while it talks, so the
+ * hair and clothes never flicker. Motion (breathing, bounce, squash and stretch, lean) is applied in code.
  */
 final class GuideView extends View {
     enum Pose { IDLE, TALK, WAVE, POINT, CHEER }
 
-    private static final int SKIN = 0xFFF2C6A0, SKIN_SHADE = 0xFFE0AE86, HAIR = 0xFF2B2B3A, HOODIE = 0xFF0D2540,
-            PANTS = 0xFF1B3A5C, CYAN = 0xFF27D3FF, MOUTH = 0xFF5A1F27;
+    private static Bitmap base;
+    private static final Map<String, Bitmap> patches = new HashMap<>();
+    private static final Map<String, int[]> pos = new HashMap<>();   // name -> x, y (in sprite pixels)
+    private static int spriteW, spriteH;
 
-    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path path = new Path();
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint shadow = new Paint(Paint.ANTI_ALIAS_FLAG);   // separate from the sprite paint, or the sprite inherits its transparency
     private final RectF r = new RectF();
 
     private Pose pose = Pose.IDLE;
-    private float pointDir = 1f;              // -1 points left, +1 points right
-    private float lookX = 0f;                 // where the eyes look, -1..1
-    private float mouthOpen, blink = 1f;
-    private long t0 = System.nanoTime(), nextBlinkAt = 2500, blinkUntil, cheerStart;
+    private float pointDir = 1f;
+    private long t0 = System.nanoTime(), nextBlinkAt = 2200, blinkUntil, cheerStart;
 
-    // Speech state: the mouth walks through the text over the speech duration.
+    // Speech: the mouth steps through the text over the duration of the audio.
     private String speech = "";
     private long speechStart, speechMs;
+    private String mouth = "mouth_closed";
 
     private ValueAnimator clock;
 
-    GuideView(Context c) { super(c); }
+    GuideView(Context c) {
+        super(c);
+        load(c);
+    }
+
+    private static synchronized void load(Context c) {
+        if (base != null) return;
+        try {
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inScaled = false;
+            base = BitmapFactory.decodeResource(c.getResources(), R.drawable.guide_base, o);
+            String[] names = {"mouth_closed", "mouth_ah", "mouth_oh", "mouth_ee", "eyes_blink"};
+            int[] ids = {R.drawable.guide_mouth_closed, R.drawable.guide_mouth_ah, R.drawable.guide_mouth_oh,
+                    R.drawable.guide_mouth_ee, R.drawable.guide_eyes_blink};
+            for (int i = 0; i < names.length; i++) patches.put(names[i], BitmapFactory.decodeResource(c.getResources(), ids[i], o));
+            try (InputStream in = c.getResources().openRawResource(R.raw.guide_sprite)) {
+                byte[] b = new byte[in.available()];
+                in.read(b);
+                JSONObject m = new JSONObject(new String(b, "UTF-8"));
+                spriteW = m.getInt("w");
+                spriteH = m.getInt("h");
+                JSONObject pj = m.getJSONObject("patches");
+                for (String n : names) pos.put(n, new int[]{pj.getJSONObject(n).getInt("x"), pj.getJSONObject(n).getInt("y")});
+            }
+        } catch (Exception e) {
+            base = null;
+        }
+    }
 
     @Override protected void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -55,12 +89,11 @@ final class GuideView extends View {
         super.onDetachedFromWindow();
     }
 
-    // ---- control ----
+    // ---- control (same API as before) ----
 
     void setPose(Pose pz) { pose = pz; if (pz == Pose.CHEER) cheerStart = ms(); }
-    void pointToward(float dir) { pointDir = dir < 0 ? -1f : 1f; lookX = pointDir * 0.7f; }
+    void pointToward(float dir) { pointDir = dir < 0 ? -1f : 1f; }
 
-    /** Speak: the mouth follows the text for durationMs (0 = estimate from the length). */
     void speak(String text, long durationMs) {
         speech = text == null ? "" : text;
         speechMs = durationMs > 0 ? durationMs : Math.max(1200, speech.length() * 62L);
@@ -68,7 +101,7 @@ final class GuideView extends View {
         if (pose == Pose.IDLE) pose = Pose.TALK;
     }
 
-    void stopSpeaking() { speechMs = 0; if (pose == Pose.TALK) pose = Pose.IDLE; }
+    void stopSpeaking() { speechMs = 0; mouth = "mouth_closed"; if (pose == Pose.TALK) pose = Pose.IDLE; }
 
     /** Grow out of the spot the view's bottom-centre sits on, with a little overshoot. */
     void popIn() {
@@ -86,163 +119,75 @@ final class GuideView extends View {
 
     private long ms() { return (System.nanoTime() - t0) / 1_000_000L; }
 
-    /** Mouth openness for the character being spoken right now. Vowels open wide, m/b/p close. */
-    private float targetMouth(long now) {
-        if (speechMs <= 0 || speech.isEmpty()) return 0f;
+    /** Which mouth picture to show for the letter being spoken right now. */
+    private String viseme(long now) {
+        if (speechMs <= 0 || speech.isEmpty()) return "mouth_closed";
         long el = now - speechStart;
-        if (el > speechMs) { speechMs = 0; if (pose == Pose.TALK) pose = Pose.IDLE; return 0f; }
+        if (el > speechMs) { speechMs = 0; if (pose == Pose.TALK) pose = Pose.IDLE; return "mouth_closed"; }
         int i = Math.min(speech.length() - 1, (int) (el * speech.length() / (float) speechMs));
         char ch = Character.toLowerCase(speech.charAt(i));
-        if ("aoe".indexOf(ch) >= 0) return 0.95f;
-        if ("iuy".indexOf(ch) >= 0) return 0.6f;
-        if ("mbp".indexOf(ch) >= 0) return 0.02f;
-        if (!Character.isLetter(ch)) return 0.1f;
-        return 0.38f;
+        if ("ae".indexOf(ch) >= 0) return "mouth_ah";
+        if ("ouw".indexOf(ch) >= 0) return "mouth_oh";
+        if ("iy".indexOf(ch) >= 0) return "mouth_ee";
+        return "mouth_closed";                       // consonants, spaces and punctuation
     }
 
     // ---- drawing ----
 
     @Override protected void onDraw(Canvas c) {
+        if (base == null || getWidth() == 0) return;
         long now = ms();
-        float s = Math.min(getWidth() / 200f, getHeight() / 300f);
+        float shadowH = getHeight() * 0.035f;
+        float s = (getHeight() - shadowH * 1.4f) / spriteH;
+        float w = spriteW * s;
+        float left = (getWidth() - w) / 2f, bottom = getHeight() - shadowH;
+
+        // Ground shadow stays put while the body moves.
+        shadow.setColor(0x59000000);
+        r.set(getWidth() * 0.18f, getHeight() - shadowH * 1.7f, getWidth() * 0.82f, getHeight() - shadowH * 0.3f);
+        c.drawOval(r, shadow);
+
+        // Motion: breathing, lean, bounce, squash and stretch, all pivoting on the feet.
+        float breathe = (float) Math.sin(now / 560.0) * 0.007f;
+        float lean = 0f, hop = 0f, sx = 1f, sy = 1f + breathe;
+        boolean talking = speechMs > 0;
+        if (talking) { lean = (float) Math.sin(now / 330.0) * 1.1f; sy += (float) Math.abs(Math.sin(now / 190.0)) * 0.012f; }
+        switch (pose) {
+            case WAVE:  lean = (float) Math.sin(now / 90.0) * 3.2f; hop = -Math.abs((float) Math.sin(now / 160.0)) * getHeight() * 0.025f; break;
+            case POINT: lean = pointDir * 4.5f; break;
+            case CHEER: {
+                long ce = now - cheerStart;
+                float ph = Math.min(1f, ce / 900f);
+                hop = -(float) Math.abs(Math.sin(ph * Math.PI * 2)) * getHeight() * 0.06f;
+                float squash = (float) Math.sin(ph * Math.PI * 4) * 0.03f;
+                sy += squash; sx -= squash * 0.8f;
+                if (ce > 1800) pose = talking ? Pose.TALK : Pose.IDLE;
+                break;
+            }
+            default: break;
+        }
         c.save();
-        c.translate((getWidth() - 200f * s) / 2f, getHeight() - 300f * s);   // stand on the bottom edge
+        c.translate(0, hop);
+        c.rotate(lean, getWidth() / 2f, bottom);
+        c.scale(sx, sy, getWidth() / 2f, bottom);
+        c.translate(left, bottom - spriteH * s);
         c.scale(s, s);
 
-        float talk = speechMs > 0 ? 1f : 0f;
-        mouthOpen += (targetMouth(now) - mouthOpen) * 0.45f;
-        if (now > nextBlinkAt) { blinkUntil = now + 140; nextBlinkAt = now + 2200 + (long) (Math.random() * 2600); }
-        blink = now < blinkUntil ? 0.08f : 1f;
+        c.drawBitmap(base, 0, 0, p);
 
-        float bob = (float) Math.sin(now / 520.0) * 1.6f;
-        float jump = 0f;
-        if (pose == Pose.CHEER) {
-            long ce = now - cheerStart;
-            jump = ce < 900 ? -Math.abs((float) Math.sin(ce / 900.0 * Math.PI * 2)) * 16f : 0f;
-            if (ce > 1800) pose = speechMs > 0 ? Pose.TALK : Pose.IDLE;
-        }
+        // Eyes: a quick blink every few seconds.
+        if (now > nextBlinkAt) { blinkUntil = now + 150; nextBlinkAt = now + 2300 + (long) (Math.random() * 2700); }
+        if (now < blinkUntil) draw(c, "eyes_blink");
 
-        // Ground shadow stays put while the body bobs or jumps.
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(0x55000000);
-        r.set(52, 286, 148, 299);
-        c.drawOval(r, p);
-
-        c.translate(0, bob + jump);
-        drawLegs(c);
-        drawArm(c, true, now);     // back arm (character's left)
-        drawTorso(c);
-        drawArm(c, false, now);    // front arm (character's right): the expressive one
-        drawHead(c, now, talk);
+        // Mouth: the picture that matches the letter being spoken (the neutral smile is already in the base).
+        mouth = viseme(now);
+        if (!"mouth_closed".equals(mouth)) draw(c, mouth);
         c.restore();
     }
 
-    private void drawLegs(Canvas c) {
-        p.setColor(PANTS);
-        r.set(78, 205, 97, 274); c.drawRoundRect(r, 8, 8, p);
-        r.set(103, 205, 122, 274); c.drawRoundRect(r, 8, 8, p);
-        p.setColor(0xFFF4F7FA);
-        r.set(70, 267, 99, 286); c.drawOval(r, p);
-        r.set(101, 267, 130, 286); c.drawOval(r, p);
-        p.setColor(CYAN);
-        r.set(72, 280, 98, 284); c.drawRoundRect(r, 2, 2, p);
-        r.set(102, 280, 128, 284); c.drawRoundRect(r, 2, 2, p);
-    }
-
-    private void drawTorso(Canvas c) {
-        p.setStyle(Paint.Style.FILL);
-        p.setColor(HOODIE);
-        r.set(60, 118, 140, 216); c.drawRoundRect(r, 24, 24, p);
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2f); p.setColor(0x9927D3FF);
-        c.drawRoundRect(r, 24, 24, p);
-        // Arc-reactor emblem
-        p.setStrokeWidth(3f); p.setColor(CYAN);
-        c.drawCircle(100, 166, 13, p);
-        p.setStyle(Paint.Style.FILL); p.setColor(0x6627D3FF);
-        c.drawCircle(100, 166, 10, p);
-        p.setColor(0xFFFFFFFF);
-        c.drawCircle(100, 166, 4.5f, p);
-        // Hood collar
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(5f); p.setColor(0xFF163355);
-        r.set(78, 106, 122, 134); c.drawArc(r, 0, 180, false, p);
-    }
-
-    private void drawArm(Canvas c, boolean back, long now) {
-        float sx = back ? 66 : 134, sy = 136, ex, ey;
-        double tt = now / 1000.0;
-        if (back) {
-            ex = 46 + (float) Math.sin(tt * 1.4) * 2f; ey = 192;
-            if (pose == Pose.CHEER) { ex = 38; ey = 92; }
-        } else switch (pose) {
-            case WAVE:  ex = 160 + (float) Math.sin(tt * 9) * 9f; ey = 96; break;
-            case POINT: ex = 100 + pointDir * 92; ey = 138; break;
-            case CHEER: ex = 162; ey = 92; break;
-            case TALK:  ex = 156 + (float) Math.sin(tt * 3.2) * 4f; ey = 176 + (float) Math.sin(tt * 4.4) * 9f; break;
-            default:    ex = 152; ey = 192;
-        }
-        p.setStyle(Paint.Style.STROKE); p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeWidth(17f); p.setColor(HOODIE);
-        c.drawLine(sx, sy, ex, ey, p);
-        p.setStrokeWidth(2f); p.setColor(0x6627D3FF);
-        c.drawLine(sx, sy, ex, ey, p);
-        p.setStyle(Paint.Style.FILL); p.setColor(SKIN);
-        c.drawCircle(ex, ey, 8.5f, p);
-    }
-
-    private void drawHead(Canvas c, long now, float talk) {
-        c.save();
-        float tilt = pose == Pose.TALK || talk > 0 ? (float) Math.sin(now / 340.0) * 2.2f : (float) Math.sin(now / 900.0) * 0.8f;
-        c.rotate(tilt, 100, 118);
-        // neck
-        p.setStyle(Paint.Style.FILL); p.setColor(SKIN_SHADE);
-        r.set(89, 104, 111, 128); c.drawRect(r, p);
-        // hair (back)
-        p.setColor(HAIR);
-        c.drawCircle(100, 68, 49, p);
-        // ears and face
-        p.setColor(SKIN);
-        c.drawCircle(55, 78, 8, p); c.drawCircle(145, 78, 8, p);
-        c.drawCircle(100, 76, 43, p);
-        // fringe
-        p.setColor(HAIR);
-        path.reset();
-        path.moveTo(55, 72); path.quadTo(100, 8, 145, 72);
-        path.quadTo(126, 50, 104, 60); path.quadTo(84, 46, 55, 72); path.close();
-        c.drawPath(path, p);
-        // headset: band, ear cups, boom mic
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(4f); p.setColor(CYAN);
-        r.set(52, 22, 148, 118); c.drawArc(r, 196, 148, false, p);
-        p.setStyle(Paint.Style.FILL);
-        c.drawCircle(53, 80, 9, p); c.drawCircle(147, 80, 9, p);
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3f);
-        path.reset(); path.moveTo(53, 86); path.quadTo(60, 108, 84, 104); c.drawPath(path, p);
-        p.setStyle(Paint.Style.FILL); c.drawCircle(86, 104, 4.2f, p);
-        // eyes
-        float ey = 76, raise = talk > 0 || pose == Pose.CHEER ? 3.2f : 0f;
-        for (int k = 0; k < 2; k++) {
-            float cx = k == 0 ? 84 : 116;
-            p.setColor(0xFFFFFFFF);
-            r.set(cx - 8, ey - 9 * blink, cx + 8, ey + 9 * blink); c.drawOval(r, p);
-            p.setColor(0xFF1F2430);
-            c.drawCircle(cx + lookX * 3.2f, ey, 4.6f * (blink < 0.5f ? 0.2f : 1f), p);
-            p.setColor(0xFFFFFFFF);
-            if (blink > 0.5f) c.drawCircle(cx + lookX * 3.2f + 1.6f, ey - 1.8f, 1.4f, p);
-            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(2.6f); p.setColor(HAIR);
-            c.drawLine(cx - 8, ey - 14 - raise, cx + 8, ey - 15 - raise - (k == 0 ? 0 : 0), p);
-            p.setStyle(Paint.Style.FILL);
-        }
-        // cheeks
-        p.setColor(0x44FF7A8A);
-        c.drawCircle(73, 94, 7, p); c.drawCircle(127, 94, 7, p);
-        // mouth: smile when closed, an oval that opens with the words when speaking
-        if (mouthOpen < 0.09f) {
-            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3f); p.setStrokeCap(Paint.Cap.ROUND); p.setColor(0xFF8A3B3B);
-            r.set(88, 90, 112, 108); c.drawArc(r, 20, 140, false, p);
-        } else {
-            float w = 13 + 8 * mouthOpen, h = 4 + 15 * mouthOpen;
-            p.setStyle(Paint.Style.FILL); p.setColor(MOUTH);
-            r.set(100 - w, 98, 100 + w, 98 + h); c.drawOval(r, p);
-            if (mouthOpen > 0.5f) { p.setColor(0xFFE0707F); r.set(100 - w * 0.55f, 98 + h * 0.55f, 100 + w * 0.55f, 98 + h * 0.95f); c.drawOval(r, p); }
-        }
-        c.restore();
+    private void draw(Canvas c, String name) {
+        Bitmap b = patches.get(name);
+        int[] at = pos.get(name);
+        if (b != null && at != null) c.drawBitmap(b, at[0], at[1], p);
     }
 }

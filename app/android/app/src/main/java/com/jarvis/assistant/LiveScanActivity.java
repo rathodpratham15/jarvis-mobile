@@ -134,7 +134,7 @@ public class LiveScanActivity extends AppCompatActivity {
         guideLayer = new FrameLayout(this);
         guide = new GuideView(this);
         guide.setVisibility(View.GONE);
-        guideLayer.addView(guide, new FrameLayout.LayoutParams(dp(150), dp(225)));
+        guideLayer.addView(guide, new FrameLayout.LayoutParams(dp(130), dp(300)));
         bubble = label("", 14, "#FFFFFF");
         bubble.setPadding(dp(14), dp(10), dp(14), dp(10));
         GradientDrawable bb = new GradientDrawable();
@@ -504,7 +504,7 @@ public class LiveScanActivity extends AppCompatActivity {
     /** Stand the guide on top of the item (or bottom-left if SAM did not find it), and pop it out of that spot. */
     private void placeGuide(float[] box) {
         int vw = preview.getWidth(), vh = preview.getHeight();
-        int gw = dp(150), gh = dp(225), cardTop = vh - cardView.getHeight() - dp(6), topLimit = dp(110);
+        int gw = dp(130), gh = dp(300), cardTop = vh - cardView.getHeight() - dp(6), topLimit = dp(110);
         int left, feetY;
         boolean pointRight = true;
         if (box != null) {
@@ -592,7 +592,7 @@ public class LiveScanActivity extends AppCompatActivity {
 
     private void moveGuideTo(float[] box) {
         int vw = preview.getWidth(), vh = preview.getHeight();
-        int gw = dp(150), gh = dp(225), cardTop = vh - cardView.getHeight() - dp(6), topLimit = dp(110);
+        int gw = dp(130), gh = dp(300), cardTop = vh - cardView.getHeight() - dp(6), topLimit = dp(110);
         float fw = box[4], fh = box[5], sc = Math.max(vw / fw, vh / fh);
         float ox = (fw * sc - vw) / 2f, oy = (fh * sc - vh) / 2f;
         float x1 = box[0] * fw * sc - ox, x2 = box[2] * fw * sc - ox, y1 = box[1] * fh * sc - oy, y2 = box[3] * fh * sc - oy;
