@@ -150,6 +150,10 @@ export function HomeScreen(p: Props) {
 
       <div className="suggestion-chips-grid">
         {CHIPS.map((c) => <button key={c} className="suggestion-chip" onClick={() => setGoal(c)}><span>{c}</span></button>)}
+        {isNativeAndroid() && (
+          <button className="suggestion-chip" onClick={() => DeviceControl.openLiveScan().catch(() => {})}
+            style={{ borderColor: "var(--accent-cyan)", color: "var(--accent-cyan)" }}><span>● Live scan</span></button>
+        )}
       </div>
 
       <div className="execution-action-row">

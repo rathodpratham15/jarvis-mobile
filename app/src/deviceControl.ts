@@ -23,6 +23,7 @@ interface DeviceControlPlugin {
   disableWakeWord(): Promise<void>;
   saveConfig(cfg: { baseUrl: string; token: string; fallbackUrl?: string }): Promise<void>;
   listen(): Promise<{ text: string }>;
+  openLiveScan(): Promise<void>;
   getMemories(): Promise<{ items: string[] }>;
   addMemory(o: { fact: string }): Promise<{ items: string[] }>;
   removeMemory(o: { fact: string }): Promise<{ items: string[] }>;

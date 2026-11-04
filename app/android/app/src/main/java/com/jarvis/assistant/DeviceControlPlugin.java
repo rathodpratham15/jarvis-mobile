@@ -69,6 +69,13 @@ public class DeviceControlPlugin extends Plugin {
         call.resolve();
     }
 
+    @PluginMethod
+    public void openLiveScan(PluginCall call) {
+        Intent i = new Intent(getContext(), LiveScanActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(i);
+        call.resolve();
+    }
+
     // ---- memory (stored only on this phone) ----
     @PluginMethod
     public void getMemories(PluginCall call) {
