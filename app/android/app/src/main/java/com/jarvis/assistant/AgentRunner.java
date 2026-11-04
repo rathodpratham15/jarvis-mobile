@@ -143,6 +143,15 @@ final class AgentRunner {
 
     static void speak(String s) { speak(s, null); }
 
+    /** Cut off whatever is being spoken right now (the done/start callbacks are dropped, not fired). */
+    static void stopSpeech() {
+        pendingDone = null;
+        pendingStart = null;
+        queued = null;
+        try { if (player != null) { player.stop(); player.release(); player = null; } } catch (Exception ignored) { }
+        try { if (tts != null) tts.stop(); } catch (Exception ignored) { }
+    }
+
     /** Length in ms of the clip being played (0 when the built-in voice speaks and the length is unknown). */
     static volatile long lastSpeechMs;
     private static volatile Runnable pendingStart;

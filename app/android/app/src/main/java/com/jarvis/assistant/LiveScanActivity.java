@@ -81,6 +81,18 @@ public class LiveScanActivity extends AppCompatActivity {
     private FrameLayout guideLayer;
     private View cardView, rootView;
     private volatile boolean guideOn = true, guideBusy;
+    // Tracking: while the guide is out, keep re-locating its item so it follows the item as the camera moves.
+    private volatile String trackItem;
+    private volatile int trackMisses;
+    private final AtomicBoolean trackBusy = new AtomicBoolean(false);
+    private int baseLeft, baseTop, baseBubbleLeft, baseBubbleTop, bubbleW;
+    private final Runnable trackTick = new Runnable() {
+        @Override public void run() {
+            if (trackItem == null || isFinishing()) return;
+            wantFrame.set(true);
+            main.postDelayed(this, 1300);
+        }
+    };
     private volatile String lastGuideItem;
     private java.util.Set<String> discoveries = new java.util.HashSet<>();
 
@@ -216,7 +228,7 @@ public class LiveScanActivity extends AppCompatActivity {
         speakBtn.setOnClickListener(v -> {
             guideOn = !guideOn;
             speakBtn.setText(guideOn ? "Guide: on" : "Guide: off");
-            if (!guideOn) { guide.popOut(null); bubble.setVisibility(View.GONE); guideBusy = false; AgentRunner.speak(" ", () -> { }); }
+            if (!guideOn) { stopTracking(); AgentRunner.stopSpeech(); guide.stopSpeaking(); guide.popOut(null); bubble.setVisibility(View.GONE); guideBusy = false; }
         });
         row.addView(speakBtn, new LinearLayout.LayoutParams(0, dp(46), 1f));
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
@@ -390,6 +402,7 @@ public class LiveScanActivity extends AppCompatActivity {
     }
 
     private void handleFrame(Bitmap bmp) {
+        if (trackItem != null) { trackFrame(bmp); return; }
         int[] h = hash(bmp);
         long nowMs = System.currentTimeMillis();
         if (sharpness(bmp) < 30 && nowMs - lastRefocusAt > 4000) {          // blurred: do what a person does and refocus
@@ -467,7 +480,7 @@ public class LiveScanActivity extends AppCompatActivity {
                 }
             } catch (Exception ignored) { }
             final float[] fb = box;
-            runOnUiThread(() -> { if (!isFinishing()) { placeGuide(fb); startTalking(text); } });
+            runOnUiThread(() -> { if (!isFinishing()) { placeGuide(fb); startTalking(text); if (fb != null) startTracking(item); } });
         });
     }
 
@@ -514,6 +527,82 @@ public class LiveScanActivity extends AppCompatActivity {
             bl.topMargin = Math.max(dp(100), lp.topMargin - dp(78));
         }
         bubble.setLayoutParams(bl);
+        guide.setTranslationX(0); guide.setTranslationY(0); bubble.setTranslationX(0); bubble.setTranslationY(0);
+        baseLeft = lp.leftMargin; baseTop = lp.topMargin; baseBubbleLeft = bl.leftMargin; baseBubbleTop = bl.topMargin; bubbleW = bl.width;
+    }
+
+    // ---- following the item as the camera moves ----
+
+    private void startTracking(String item) {
+        trackItem = item;
+        trackMisses = 0;
+        main.removeCallbacks(trackTick);
+        main.postDelayed(trackTick, 1300);
+    }
+
+    private void stopTracking() {
+        trackItem = null;
+        main.removeCallbacks(trackTick);
+    }
+
+    /** Re-locate the item in this frame (small and fast); glide the guide to it, or let it go if the item is gone. */
+    private void trackFrame(Bitmap bmp) {
+        final String item = trackItem;
+        if (item == null || !trackBusy.compareAndSet(false, true)) return;
+        worker.execute(() -> {
+            float[] box = null;
+            try {
+                float sc = Math.min(1f, 640f / Math.max(bmp.getWidth(), bmp.getHeight()));
+                Bitmap small = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc), Math.round(bmp.getHeight() * sc), true);
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                small.compress(Bitmap.CompressFormat.JPEG, 70, bos);
+                JSONObject r = Http.post(this, "/api/locate", new JSONObject()
+                        .put("image", Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)).put("item", item), 15000);
+                if (r.optBoolean("found")) {
+                    box = new float[]{(float) r.getDouble("x1"), (float) r.getDouble("y1"), (float) r.getDouble("x2"),
+                            (float) r.getDouble("y2"), (float) r.getDouble("frame_w"), (float) r.getDouble("frame_h")};
+                }
+            } catch (Exception ignored) { }
+            final float[] fb = box;
+            runOnUiThread(() -> {
+                if (trackItem == null || isFinishing()) return;
+                if (fb != null) { trackMisses = 0; moveGuideTo(fb); }
+                else if (++trackMisses >= 2) guideLost();
+            });
+            trackBusy.set(false);
+        });
+    }
+
+    private void moveGuideTo(float[] box) {
+        int vw = preview.getWidth(), vh = preview.getHeight();
+        int gw = dp(150), gh = dp(225), cardTop = vh - cardView.getHeight() - dp(6), topLimit = dp(110);
+        float fw = box[4], fh = box[5], sc = Math.max(vw / fw, vh / fh);
+        float ox = (fw * sc - vw) / 2f, oy = (fh * sc - vh) / 2f;
+        float x1 = box[0] * fw * sc - ox, x2 = box[2] * fw * sc - ox, y1 = box[1] * fh * sc - oy, y2 = box[3] * fh * sc - oy;
+        float cx = (x1 + x2) / 2f;
+        int feetY = Math.round(y1 + (y2 - y1) * 0.22f);
+        if (feetY - gh < topLimit) feetY = Math.round(Math.max(y1 + (y2 - y1) * 0.55f, gh + topLimit));
+        feetY = Math.min(feetY, cardTop);
+        int left = Math.max(dp(4), Math.min(vw - gw - dp(4), Math.round(cx - gw / 2f)));
+        int top = Math.max(dp(60), feetY - gh);
+        float dx = left - baseLeft, dy = top - baseTop;
+        // Keep the speech bubble on screen while it follows.
+        float bdx = Math.max(dp(4) - baseBubbleLeft, Math.min(vw - bubbleW - dp(4) - baseBubbleLeft, dx));
+        android.view.animation.DecelerateInterpolator ease = new android.view.animation.DecelerateInterpolator();
+        guide.animate().translationX(dx).translationY(dy).setDuration(380).setInterpolator(ease).start();
+        bubble.animate().translationX(bdx).translationY(dy).setDuration(380).setInterpolator(ease).start();
+        guide.pointToward(cx >= vw / 2f ? -1f : 1f);
+    }
+
+    /** The item left the view: stop talking about it and step away. */
+    private void guideLost() {
+        stopTracking();
+        AgentRunner.stopSpeech();
+        guide.stopSpeaking();
+        status.setText("Lost sight of it. Point back at it and I'll try again.");
+        bubble.animate().alpha(0f).setDuration(160).withEndAction(() -> bubble.setVisibility(View.GONE)).start();
+        guide.popOut(() -> guideBusy = false);
+        lastGuideItem = null;          // if you find it again, the guide may come back
     }
 
     private void startTalking(String text) {
@@ -522,6 +611,7 @@ public class LiveScanActivity extends AppCompatActivity {
         bubble.setVisibility(View.VISIBLE);
         bubble.animate().alpha(1f).setStartDelay(260).setDuration(220).start();
         AgentRunner.speak(text, () -> guide.speak(text, AgentRunner.lastSpeechMs), () -> {
+            stopTracking();
             guide.stopSpeaking();
             guide.setPose(GuideView.Pose.CHEER);
             main.postDelayed(() -> {
@@ -615,7 +705,9 @@ public class LiveScanActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        stopTracking();
         main.removeCallbacksAndMessages(null);
+        AgentRunner.stopSpeech();
         guide.stopSpeaking();
         if (recorder != null) recorder.cancel();
         if (analysisExec != null) analysisExec.shutdownNow();
