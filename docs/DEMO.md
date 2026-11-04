@@ -25,7 +25,7 @@ assistant.
 | 1:50 | "Hey Jarvis, summarize this" on a chat, then "add this to my calendar" on a page with a date. | Screen-aware answers (keep this to about 15 seconds) |
 | 2:05 | "Hey Jarvis, turn on battery saver." Start a longer task and tap **Stop** in the pill. | The hidden agent at work; Stop works within a second or two |
 | 2:20 | Reach a send or payment-style screen and let the safety prompt appear; tap Deny. | The confirmation quotes what is on screen |
-| 2:30 | Voice-over over the architecture diagram or README: "Muse Spark reasons and sees, Muse Voice Transcribe hears, Muse Image designed the guide, SAM 3.1 places it and finds icon-only buttons. Contacts never leave the phone. It's open source under MIT." | README diagram, repo page |
+| 2:30 | Voice-over over the architecture diagram or README: "Muse Spark reasons and sees, Muse Voice Transcribe hears, Muse Image animated the guide's face, SAM 3.1 places it and finds icon-only buttons. Contacts never leave the phone. It's open source under MIT." | README diagram, repo page |
 | 2:50 | "JARVIS Mobile. Delegate a task. It figures out how." | Logo, GitHub URL |
 
 ## If something fails

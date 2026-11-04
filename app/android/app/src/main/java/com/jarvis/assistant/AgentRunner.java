@@ -143,8 +143,31 @@ final class AgentRunner {
 
     static void speak(String s) { speak(s, null); }
 
+    private static volatile int speechGen;
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<java.io.File>> PREP =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static int prepSlot;
+
+    private static java.io.File fetchClip(String s, int slot) throws Exception {
+        byte[] mp3 = Http.postForBytes(appCtx, "/api/tts", new JSONObject().put("text", s), 15000);
+        java.io.File f = new java.io.File(appCtx.getCacheDir(), "tts" + slot + ".mp3");
+        try (java.io.FileOutputStream os = new java.io.FileOutputStream(f)) { os.write(mp3); }
+        return f;
+    }
+
+    /** Start downloading the voice clip now, so it is ready by the time the caller actually speaks the same text. */
+    static void prepare(String s) {
+        if (s == null || s.isEmpty() || appCtx == null || PREP.containsKey(s)) return;
+        final int slot = (prepSlot++ % 3) + 1;
+        final java.util.concurrent.CompletableFuture<java.io.File> cf = new java.util.concurrent.CompletableFuture<>();
+        PREP.put(s, cf);
+        new Thread(() -> { try { cf.complete(fetchClip(s, slot)); } catch (Exception e) { cf.completeExceptionally(e); } }, "jarvis-tts-prep").start();
+    }
+
     /** Cut off whatever is being spoken right now (the done/start callbacks are dropped, not fired). */
     static void stopSpeech() {
+        speechGen++;                                   // any clip still downloading is dropped when it arrives
+        PREP.clear();
         pendingDone = null;
         pendingStart = null;
         queued = null;
@@ -176,16 +199,17 @@ final class AgentRunner {
 
     private static void speakWith(String s, Runnable done) {
         pendingDone = done;
+        final int gen = ++speechGen;
         if (done != null) MAIN.postDelayed(() -> { if (pendingDone == done) fireDone(); }, 8000L + s.length() * 120L);
+        final java.util.concurrent.CompletableFuture<java.io.File> prepared = PREP.remove(s);
         new Thread(() -> {
             try {
-                byte[] mp3 = Http.postForBytes(appCtx, "/api/tts", new JSONObject().put("text", s), 15000);
-                java.io.File f = new java.io.File(appCtx.getCacheDir(), "tts.mp3");
-                try (java.io.FileOutputStream os = new java.io.FileOutputStream(f)) { os.write(mp3); }
-                MAIN.post(() -> play(f, s));
+                java.io.File f = prepared != null ? prepared.get(15, java.util.concurrent.TimeUnit.SECONDS) : fetchClip(s, 0);
+                if (gen != speechGen) return;          // stopped (or replaced) while the clip was downloading
+                MAIN.post(() -> { if (gen == speechGen) play(f, s); });
             } catch (Exception e) {
                 android.util.Log.w(TAG, "ElevenLabs unavailable (" + e.getMessage() + "), using device voice");
-                speakAndroid(s);
+                if (gen == speechGen) speakAndroid(s);
             }
         }, "jarvis-tts").start();
     }

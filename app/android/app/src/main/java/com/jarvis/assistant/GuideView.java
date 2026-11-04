@@ -18,9 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The JARVIS guide. The character was designed and edited by Meta's Muse Image model (one base picture plus edited
- * mouth shapes and a blink); see docs/GUIDE_CHARACTER.md. Only small face patches are swapped while it talks, so the
- * hair and clothes never flicker. Motion (breathing, bounce, squash and stretch, lean) is applied in code.
+ * The JARVIS guide: the author's character design, with mouth shapes and a blink generated as edits by Meta's Muse Image
+ * model; see docs/GUIDE_CHARACTER.md. Only small face patches are swapped while it talks, so the hair and clothes never
+ * flicker. The body stays still on purpose (its hands are in its pockets); only the mouth and the eyes move.
  */
 final class GuideView extends View {
     enum Pose { IDLE, TALK, WAVE, POINT, CHEER }
@@ -147,29 +147,9 @@ final class GuideView extends View {
         r.set(getWidth() * 0.18f, getHeight() - shadowH * 1.7f, getWidth() * 0.82f, getHeight() - shadowH * 0.3f);
         c.drawOval(r, shadow);
 
-        // Motion: breathing, lean, bounce, squash and stretch, all pivoting on the feet.
-        float breathe = (float) Math.sin(now / 560.0) * 0.007f;
-        float lean = 0f, hop = 0f, sx = 1f, sy = 1f + breathe;
-        boolean talking = speechMs > 0;
-        if (talking) { lean = (float) Math.sin(now / 330.0) * 1.1f; sy += (float) Math.abs(Math.sin(now / 190.0)) * 0.012f; }
-        switch (pose) {
-            case WAVE:  lean = (float) Math.sin(now / 90.0) * 3.2f; hop = -Math.abs((float) Math.sin(now / 160.0)) * getHeight() * 0.025f; break;
-            case POINT: lean = pointDir * 4.5f; break;
-            case CHEER: {
-                long ce = now - cheerStart;
-                float ph = Math.min(1f, ce / 900f);
-                hop = -(float) Math.abs(Math.sin(ph * Math.PI * 2)) * getHeight() * 0.06f;
-                float squash = (float) Math.sin(ph * Math.PI * 4) * 0.03f;
-                sy += squash; sx -= squash * 0.8f;
-                if (ce > 1800) pose = talking ? Pose.TALK : Pose.IDLE;
-                break;
-            }
-            default: break;
-        }
+        // Standing still: only the mouth and the eyes move (the character's hands are in its pockets, so no body motion).
         c.save();
-        c.translate(0, hop);
-        c.rotate(lean, getWidth() / 2f, bottom);
-        c.scale(sx, sy, getWidth() / 2f, bottom);
+        c.translate(0, 0);
         c.translate(left, bottom - spriteH * s);
         c.scale(s, s);
 

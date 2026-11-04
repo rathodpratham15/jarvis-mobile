@@ -427,7 +427,7 @@ public class LiveScanActivity extends AppCompatActivity {
         runOnUiThread(() -> status.setText(full ? "Reading everything…" : question != null ? "Looking at that…" : "Looking…"));
         worker.execute(() -> {
             try {
-                float sc = Math.min(1f, (full ? 1800f : 1280f) / Math.max(bmp.getWidth(), bmp.getHeight()));
+                float sc = Math.min(1f, (full ? 1800f : 1024f) / Math.max(bmp.getWidth(), bmp.getHeight()));
                 Bitmap small = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc), Math.round(bmp.getHeight() * sc), true);
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 small.compress(Bitmap.CompressFormat.JPEG, 80, bos);
@@ -486,11 +486,19 @@ public class LiveScanActivity extends AppCompatActivity {
             discoveriesTxt.setText("\u2605 " + discoveries.size());
             status.setText("\u2605 New discovery: " + item);
         }
+        AgentRunner.prepare(text);                                          // download the voice while SAM looks for the item
         if (item == null) { placeGuide(null); startTalking(text); return; }
         worker.execute(() -> {                                              // SAM 3.1: where is the item in the frame?
             float[] box = null;
             try {
-                JSONObject r = Http.post(this, "/api/locate", new JSONObject().put("image", b64).put("item", item), 20000);
+                byte[] raw = Base64.decode(b64, Base64.DEFAULT);
+                Bitmap full = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.length);
+                float sc = Math.min(1f, 640f / Math.max(full.getWidth(), full.getHeight()));
+                Bitmap sm = Bitmap.createScaledBitmap(full, Math.round(full.getWidth() * sc), Math.round(full.getHeight() * sc), true);
+                ByteArrayOutputStream lb = new ByteArrayOutputStream();
+                sm.compress(Bitmap.CompressFormat.JPEG, 72, lb);
+                JSONObject r = Http.post(this, "/api/locate", new JSONObject()
+                        .put("image", Base64.encodeToString(lb.toByteArray(), Base64.NO_WRAP)).put("item", item), 20000);
                 if (r.optBoolean("found")) {
                     box = new float[]{(float) r.getDouble("x1"), (float) r.getDouble("y1"), (float) r.getDouble("x2"),
                             (float) r.getDouble("y2"), (float) r.getDouble("frame_w"), (float) r.getDouble("frame_h")};
@@ -603,6 +611,7 @@ public class LiveScanActivity extends AppCompatActivity {
         int left = Math.max(dp(4), Math.min(vw - gw - dp(4), Math.round(cx - gw / 2f)));
         int top = Math.max(dp(60), feetY - gh);
         float dx = left - baseLeft, dy = top - baseTop;
+        if (Math.abs(dx - guide.getTranslationX()) < dp(40) && Math.abs(dy - guide.getTranslationY()) < dp(40)) return;   // too small to matter: stay put
         // Keep the speech bubble on screen while it follows.
         float bdx = Math.max(dp(4) - baseBubbleLeft, Math.min(vw - bubbleW - dp(4) - baseBubbleLeft, dx));
         android.view.animation.DecelerateInterpolator ease = new android.view.animation.DecelerateInterpolator();
@@ -718,6 +727,15 @@ public class LiveScanActivity extends AppCompatActivity {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startCamera();
             else { status.setText("Camera permission is needed for live scan."); caption.setText("Allow the camera in Settings → Permissions to use live scan."); }
         }
+    }
+
+    /** Leaving the screen (back, home, recents, another app): the guide stops talking at once, like any assistant. */
+    @Override
+    protected void onStop() {
+        stopTracking();
+        AgentRunner.stopSpeech();
+        guide.stopSpeaking();
+        super.onStop();
     }
 
     @Override
