@@ -113,15 +113,8 @@ export const ArcReactorLogo: React.FC<ArcReactorLogoProps> = ({
         fill={`url(#coreGlow-${state})`}
       />
 
-      {/* The JARVIS mark: a chevron over a small orb */}
-      <path
-        d="M 42.5 52 L 50 43.5 L 57.5 52"
-        stroke="#FFFFFF"
-        strokeWidth="4.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="50" cy="58.5" r="2.2" fill="#FFFFFF" />
+      {/* The JARVIS mark: a sharp white ^ */}
+      <polygon points="38,61 50,39 62,61 56.4,61 50,49.3 43.6,61" fill="#FFFFFF" />
     </svg>
   );
 };
