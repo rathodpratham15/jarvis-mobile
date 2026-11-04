@@ -51,7 +51,7 @@ public class LiveScanActivity extends AppCompatActivity {
     private static final long TICK_MS = 2500;          // how often to consider a new frame
     private static final long FORCE_AFTER_MS = 9000;   // re-describe at least this often even if the view looks the same
     private static final int MAX_FRAMES = 40;          // per session (about two minutes of continuous looking)
-    private static final int CYAN = Color.parseColor("#27D3FF");
+    private static final int CYAN = Color.parseColor("#FFFFFF");
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -139,7 +139,7 @@ public class LiveScanActivity extends AppCompatActivity {
         bubble.setPadding(dp(14), dp(10), dp(14), dp(10));
         GradientDrawable bb = new GradientDrawable();
         bb.setCornerRadius(dp(18));
-        bb.setColor(Color.parseColor("#F20D2540"));
+        bb.setColor(Color.parseColor("#F2141414"));
         bb.setStroke(dp(1), CYAN);
         bubble.setBackground(bb);
         bubble.setVisibility(View.GONE);
@@ -156,7 +156,7 @@ public class LiveScanActivity extends AppCompatActivity {
         live.setPadding(dp(12), dp(6), dp(14), dp(6));
         GradientDrawable lb = new GradientDrawable();
         lb.setCornerRadius(dp(20));
-        lb.setColor(Color.parseColor("#B3070E18"));
+        lb.setColor(Color.parseColor("#B3000000"));
         live.setBackground(lb);
         View dot = new View(this);
         GradientDrawable dg = new GradientDrawable();
@@ -191,19 +191,19 @@ public class LiveScanActivity extends AppCompatActivity {
         GradientDrawable cb = new GradientDrawable();
         float r = dp(24);
         cb.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
-        cb.setColor(Color.parseColor("#E60A1626"));
-        cb.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        cb.setColor(Color.parseColor("#E60A0A0A"));
+        cb.setStroke(dp(1), Color.parseColor("#2A2A2A"));
         card.setBackground(cb);
         caption = label("Point the camera at something.", 18, "#FFFFFF");
         caption.setMinLines(2);
         card.addView(caption);
-        status = label("Starting the camera…", 12, "#8FB0CC");
+        status = label("Starting the camera…", 12, "#A3A3A3");
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2);
         sl.topMargin = dp(6);
         card.addView(status, sl);
 
         TextView sumBtn = pill("Full summary of what I see");
-        sumBtn.setTextColor(Color.parseColor("#27D3FF"));
+        sumBtn.setTextColor(Color.parseColor("#FFFFFF"));
         sumBtn.setOnClickListener(v -> requestSummary());
         LinearLayout.LayoutParams sbl = new LinearLayout.LayoutParams(-1, dp(46));
         sbl.topMargin = dp(12);
@@ -220,7 +220,7 @@ public class LiveScanActivity extends AppCompatActivity {
         micBtn.setContentDescription("Ask a question about what you see");
         GradientDrawable mb = new GradientDrawable();
         mb.setShape(GradientDrawable.OVAL);
-        mb.setColor(Color.parseColor("#B30D2540"));
+        mb.setColor(Color.parseColor("#B3141414"));
         mb.setStroke(dp(2), CYAN);
         micBtn.setBackground(mb);
         micBtn.setOnClickListener(v -> onAsk());
@@ -238,7 +238,7 @@ public class LiveScanActivity extends AppCompatActivity {
         rl.topMargin = dp(14);
         card.addView(row, rl);
 
-        TextView note = label("Frames are sent to Meta to be read and are not saved. JARVIS describes people but never identifies them.", 11, "#5B7F9E");
+        TextView note = label("Frames are sent to Meta to be read and are not saved. JARVIS describes people but never identifies them.", 11, "#737373");
         LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
         nl.topMargin = dp(12);
         card.addView(note, nl);
@@ -246,7 +246,7 @@ public class LiveScanActivity extends AppCompatActivity {
         root.addView(card, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
         summaryOverlay = new FrameLayout(this);
-        summaryOverlay.setBackgroundColor(Color.parseColor("#F5070E18"));
+        summaryOverlay.setBackgroundColor(Color.parseColor("#F5000000"));
         summaryOverlay.setVisibility(View.GONE);
         summaryOverlay.setOnClickListener(v -> { });
         LinearLayout sc = new LinearLayout(this);
@@ -256,7 +256,7 @@ public class LiveScanActivity extends AppCompatActivity {
         st.setTypeface(null, android.graphics.Typeface.BOLD);
         sc.addView(st);
         android.widget.ScrollView sv = new android.widget.ScrollView(this);
-        summaryBody = label("", 15, "#E8F3FF");
+        summaryBody = label("", 15, "#F5F5F5");
         summaryBody.setLineSpacing(0, 1.2f);
         summaryBody.setTextIsSelectable(true);
         sv.addView(summaryBody);
@@ -287,12 +287,12 @@ public class LiveScanActivity extends AppCompatActivity {
     }
 
     private TextView pill(String s) {
-        TextView t = label(s, 13, "#E8F3FF");
+        TextView t = label(s, 13, "#F5F5F5");
         t.setGravity(Gravity.CENTER);
         GradientDrawable g = new GradientDrawable();
         g.setCornerRadius(dp(23));
-        g.setColor(Color.parseColor("#B30D2540"));
-        g.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        g.setColor(Color.parseColor("#B3141414"));
+        g.setStroke(dp(1), Color.parseColor("#2A2A2A"));
         t.setBackground(g);
         return t;
     }

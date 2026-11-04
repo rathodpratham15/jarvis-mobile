@@ -52,9 +52,9 @@ final class StatusOverlay {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(s, 14), dp(s, 6), dp(s, 10), dp(s, 6));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#D90D2540"));
+        bg.setColor(Color.parseColor("#D9141414"));
         bg.setCornerRadius(dp(s, 24));
-        bg.setStroke(dp(s, 1), Color.parseColor("#1B3A5C"));
+        bg.setStroke(dp(s, 1), Color.parseColor("#2A2A2A"));
         root.setBackground(bg);
 
         LinearLayout row = new LinearLayout(s);
@@ -63,14 +63,14 @@ final class StatusOverlay {
         View dot = dotView;
         GradientDrawable d = new GradientDrawable();
         d.setShape(GradientDrawable.OVAL);
-        d.setColor(Color.parseColor("#27D3FF"));
+        d.setColor(Color.parseColor("#FFFFFF"));
         dotShape = d;
         dot.setBackground(d);
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(dp(s, 9), dp(s, 9));
         dl.rightMargin = dp(s, 10);
         row.addView(dot, dl);
         text = new TextView(s);
-        text.setTextColor(Color.parseColor("#E8F3FF"));
+        text.setTextColor(Color.parseColor("#F5F5F5"));
         text.setTextSize(14);
         text.setMaxWidth(dp(s, 260));
         row.addView(text);
@@ -152,12 +152,12 @@ final class StatusOverlay {
             buttons.removeAllViews();
             if (dotShape != null) dotShape.setColor(Color.parseColor("#FBBF24"));
             Button deny = new Button(s); deny.setText("Deny"); deny.setAllCaps(false);
-            deny.setTextColor(Color.parseColor("#E8F3FF"));
+            deny.setTextColor(Color.parseColor("#F5F5F5"));
             GradientDrawable db = new GradientDrawable(); db.setCornerRadius(dp(s, 14)); db.setColor(Color.TRANSPARENT);
-            db.setStroke(dp(s, 2), Color.parseColor("#1B3A5C")); deny.setBackground(db);
+            db.setStroke(dp(s, 2), Color.parseColor("#2A2A2A")); deny.setBackground(db);
             Button allow = new Button(s); allow.setText("Allow"); allow.setAllCaps(false);
-            allow.setTextColor(Color.parseColor("#070E18")); allow.setTypeface(null, android.graphics.Typeface.BOLD);
-            GradientDrawable ab = new GradientDrawable(); ab.setCornerRadius(dp(s, 14)); ab.setColor(Color.parseColor("#27D3FF")); allow.setBackground(ab);
+            allow.setTextColor(Color.parseColor("#000000")); allow.setTypeface(null, android.graphics.Typeface.BOLD);
+            GradientDrawable ab = new GradientDrawable(); ab.setCornerRadius(dp(s, 14)); ab.setColor(Color.parseColor("#FFFFFF")); allow.setBackground(ab);
             deny.setOnClickListener(v -> { latch.countDown(); });
             allow.setOnClickListener(v -> { allowed[0] = true; latch.countDown(); });
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(dp(s, 96), dp(s, 44));
@@ -173,7 +173,7 @@ final class StatusOverlay {
             JarvisAccessibilityService s = JarvisAccessibilityService.get();
             if (s == null || root == null) return;
             buttons.setVisibility(View.GONE);
-            if (dotShape != null) dotShape.setColor(Color.parseColor("#27D3FF"));
+            if (dotShape != null) dotShape.setColor(Color.parseColor("#FFFFFF"));
             ((WindowManager) s.getSystemService(JarvisAccessibilityService.WINDOW_SERVICE))
                     .updateViewLayout(root, params(true));
         });

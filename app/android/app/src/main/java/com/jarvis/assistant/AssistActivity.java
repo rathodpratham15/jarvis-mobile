@@ -48,7 +48,7 @@ public class AssistActivity extends Activity {
     private static final java.util.regex.Pattern SCAN_CUE = java.util.regex.Pattern.compile(
             "\\b(scan|look(?:ing)? at|take (?:a )?(?:photo|picture|pic)|(?:use|open|start) (?:the |my )?camera)\\b",
             java.util.regex.Pattern.CASE_INSENSITIVE);
-    private static final int CYAN = Color.parseColor("#27D3FF");
+    private static final int CYAN = Color.parseColor("#FFFFFF");
 
     private VoiceRecorder recorder;
     private SpeechRecognizer deviceStt;   // fallback when Meta transcription is unavailable
@@ -110,7 +110,7 @@ public class AssistActivity extends Activity {
 
     private View buildUi() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#5904080F"));     // 35% scrim over the app behind
+        root.setBackgroundColor(Color.parseColor("#59000000"));     // 35% scrim over the app behind
         root.setOnClickListener(v -> finish());                      // tap outside the sheet to dismiss
 
         sheet = new LinearLayout(this);
@@ -133,7 +133,7 @@ public class AssistActivity extends Activity {
 
         View handle = new View(this);
         GradientDrawable hb = new GradientDrawable();
-        hb.setColor(Color.parseColor("#59E8F3FF"));
+        hb.setColor(Color.parseColor("#59F5F5F5"));
         hb.setCornerRadius(dp(3));
         handle.setBackground(hb);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(dp(44), dp(5));
@@ -155,7 +155,7 @@ public class AssistActivity extends Activity {
         transcript.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         transcript.setGravity(Gravity.CENTER);
         transcript.setMaxLines(2);
-        transcript.setShadowLayer(dp(8), 0, 0, Color.parseColor("#5927D3FF"));
+        transcript.setShadowLayer(dp(8), 0, 0, Color.parseColor("#59FFFFFF"));
         sheet.addView(transcript, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         orb = new ArcReactorOrbView(this);
@@ -185,7 +185,7 @@ public class AssistActivity extends Activity {
         mic.setContentDescription("Speak");
         GradientDrawable mb = new GradientDrawable();
         mb.setShape(GradientDrawable.OVAL);
-        mb.setColor(Color.parseColor("#B30D2540"));
+        mb.setColor(Color.parseColor("#B3141414"));
         mb.setStroke(dp(2), CYAN);
         mic.setBackground(mb);
         mic.setOnClickListener(v -> {
@@ -377,20 +377,20 @@ public class AssistActivity extends Activity {
         c.setOrientation(LinearLayout.VERTICAL);
         c.setPadding(dp(14), dp(14), dp(14), dp(14));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#B30D2540"));
+        bg.setColor(Color.parseColor("#B3141414"));
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        bg.setStroke(dp(1), Color.parseColor("#2A2A2A"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
         c.addView(text(title, 16, "#FFFFFF", false));
         LinearLayout row = new LinearLayout(this);
         for (int i = 0; i < labels.length; i++) {
             final Runnable act = actions[i];
-            TextView b = text(labels[i], 13, i == 1 ? "#070E18" : "#E8F3FF", i == 1);
+            TextView b = text(labels[i], 13, i == 1 ? "#000000" : "#F5F5F5", i == 1);
             b.setGravity(Gravity.CENTER);
             GradientDrawable bb = new GradientDrawable();
             bb.setCornerRadius(dp(22));
-            if (i == 1) bb.setColor(CYAN); else { bb.setColor(Color.parseColor("#B30D2540")); bb.setStroke(dp(1), Color.parseColor("#27D3FF")); }
+            if (i == 1) bb.setColor(CYAN); else { bb.setColor(Color.parseColor("#B3141414")); bb.setStroke(dp(1), Color.parseColor("#FFFFFF")); }
             b.setBackground(bb);
             b.setOnClickListener(v -> act.run());
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
@@ -574,9 +574,9 @@ public class AssistActivity extends Activity {
         c.setOrientation(LinearLayout.VERTICAL);
         c.setPadding(dp(14), dp(14), dp(14), dp(14));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#B30D2540"));
+        bg.setColor(Color.parseColor("#B3141414"));
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        bg.setStroke(dp(1), Color.parseColor("#2A2A2A"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
         c.addView(text(headline, 16, "#FFFFFF", false));
@@ -593,7 +593,7 @@ public class AssistActivity extends Activity {
                 View dot = new View(this);
                 GradientDrawable d = new GradientDrawable();
                 d.setShape(GradientDrawable.OVAL);
-                if (st == 1) d.setColor(CYAN); else { d.setColor(Color.TRANSPARENT); d.setStroke(dp(1), Color.parseColor("#5B7F9E")); }
+                if (st == 1) d.setColor(CYAN); else { d.setColor(Color.TRANSPARENT); d.setStroke(dp(1), Color.parseColor("#737373")); }
                 dot.setBackground(d);
                 if (st == 1) {
                     ObjectAnimator p = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.3f);
@@ -604,7 +604,7 @@ public class AssistActivity extends Activity {
                 mark = box;
             }
             row.addView(mark, new LinearLayout.LayoutParams(dp(22), dp(22)));
-            TextView t = text(missionLabels.get(i), 14, st == 3 ? "#E5484D" : st == 0 ? "#8FB0CC" : "#E8F3FF", false);
+            TextView t = text(missionLabels.get(i), 14, st == 3 ? "#E5484D" : st == 0 ? "#A3A3A3" : "#F5F5F5", false);
             t.setPadding(dp(10), 0, 0, 0);
             row.addView(t);
             c.addView(row, spaced(8));
@@ -642,26 +642,26 @@ public class AssistActivity extends Activity {
         c.setOrientation(LinearLayout.VERTICAL);
         c.setPadding(dp(14), dp(14), dp(14), dp(14));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#B30D2540"));
+        bg.setColor(Color.parseColor("#B3141414"));
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        bg.setStroke(dp(1), Color.parseColor("#2A2A2A"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
         c.addView(text(say, 18, "#FFFFFF", false));
         if (card != null) {
-            if (!card.optString("title").isEmpty()) c.addView(text(card.optString("title"), 14, "#9FC4E0", false), spaced(14));
+            if (!card.optString("title").isEmpty()) c.addView(text(card.optString("title"), 14, "#B5B5B5", false), spaced(14));
             if (!card.optString("big").isEmpty() || !card.optString("subtitle").isEmpty()) {
                 LinearLayout row = new LinearLayout(this);
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.addView(text(card.optString("big"), 34, "#FFFFFF", false));
-                TextView sub = text(card.optString("subtitle"), 18, "#CFEAFF", false);
+                TextView sub = text(card.optString("subtitle"), 18, "#E5E5E5", false);
                 sub.setPadding(dp(16), 0, 0, 0);
                 row.addView(sub);
                 c.addView(row);
             }
             String details = card.optString("text", "");
             if (!details.isEmpty()) {                       // long content: scrollable full text under the spoken summary
-                TextView body = text(details, 14, "#E8F3FF", false);
+                TextView body = text(details, 14, "#F5F5F5", false);
                 body.setLineSpacing(0, 1.15f);
                 android.widget.ScrollView sv = new android.widget.ScrollView(this);
                 sv.addView(body);
@@ -675,7 +675,7 @@ public class AssistActivity extends Activity {
             for (int i = 0; rows != null && i < rows.length(); i++) {
                 JSONArray kv = rows.optJSONArray(i);
                 LinearLayout line = new LinearLayout(this);
-                TextView k = text(kv.optString(0), 14, "#9FC4E0", false);
+                TextView k = text(kv.optString(0), 14, "#B5B5B5", false);
                 TextView v = text(kv.optString(1), 14, "#FFFFFF", false);
                 line.addView(k, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 line.addView(v);
