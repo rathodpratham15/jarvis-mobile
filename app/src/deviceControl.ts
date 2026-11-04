@@ -23,6 +23,13 @@ interface DeviceControlPlugin {
   disableWakeWord(): Promise<void>;
   saveConfig(cfg: { baseUrl: string; token: string; fallbackUrl?: string }): Promise<void>;
   listen(): Promise<{ text: string }>;
+  getMemories(): Promise<{ items: string[] }>;
+  addMemory(o: { fact: string }): Promise<{ items: string[] }>;
+  removeMemory(o: { fact: string }): Promise<{ items: string[] }>;
+  clearMemories(): Promise<{ items: string[] }>;
+  permissionStatus(): Promise<PermissionState>;
+  requestPermission(o: { id: string }): Promise<unknown>;
+  openAppSettings(): Promise<void>;
   stopListening(): Promise<void>;
   observe(opts?: { screenshot?: boolean }): Promise<Observation>;
   act(action: PhoneAction): Promise<{ result: string }>;
@@ -30,3 +37,7 @@ interface DeviceControlPlugin {
 
 export const DeviceControl = registerPlugin<DeviceControlPlugin>("DeviceControl");
 export const isNativeAndroid = () => Capacitor.getPlatform() === "android";
+
+export interface PermissionState {
+  accessibility: boolean; microphone: boolean; contacts: boolean; sms: boolean; calendar: boolean; overlay: boolean;
+}

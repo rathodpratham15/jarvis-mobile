@@ -19,7 +19,10 @@ import org.json.JSONObject;
 /** JS bridge: DeviceControl.{isEnabled, openSettings, observe, act}. */
 @CapacitorPlugin(name = "DeviceControl", permissions = {
         @Permission(alias = "mic", strings = {Manifest.permission.RECORD_AUDIO}),
-        @Permission(alias = "notif", strings = {"android.permission.POST_NOTIFICATIONS"})
+        @Permission(alias = "notif", strings = {"android.permission.POST_NOTIFICATIONS"}),
+        @Permission(alias = "contacts", strings = {Manifest.permission.READ_CONTACTS}),
+        @Permission(alias = "sms", strings = {Manifest.permission.SEND_SMS}),
+        @Permission(alias = "calendar", strings = {Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR})
 })
 public class DeviceControlPlugin extends Plugin {
 
@@ -63,6 +66,82 @@ public class DeviceControlPlugin extends Plugin {
     private void wakePermsDone(PluginCall call) {
         if (getPermissionState("mic") != PermissionState.GRANTED) { call.reject("mic"); return; }
         getContext().startForegroundService(new Intent(getContext(), WakeWordService.class));
+        call.resolve();
+    }
+
+    // ---- memory (stored only on this phone) ----
+    @PluginMethod
+    public void getMemories(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("items", new org.json.JSONArray(Memory.all(getContext())));
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void addMemory(PluginCall call) {
+        String f = call.getString("fact", "").trim();
+        if (!f.isEmpty()) Memory.remember(getContext(), f);
+        getMemories(call);
+    }
+
+    @PluginMethod
+    public void removeMemory(PluginCall call) {
+        Memory.removeExact(getContext(), call.getString("fact", ""));
+        getMemories(call);
+    }
+
+    @PluginMethod
+    public void clearMemories(PluginCall call) {
+        Memory.forget(getContext(), "all");
+        getMemories(call);
+    }
+
+    // ---- permissions screen ----
+    private boolean granted(String perm) {
+        return getContext().checkSelfPermission(perm) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    @PluginMethod
+    public void permissionStatus(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("accessibility", JarvisAccessibilityService.get() != null);
+        r.put("microphone", granted(Manifest.permission.RECORD_AUDIO));
+        r.put("contacts", granted(Manifest.permission.READ_CONTACTS));
+        r.put("sms", granted(Manifest.permission.SEND_SMS));
+        r.put("calendar", granted(Manifest.permission.READ_CALENDAR) && granted(Manifest.permission.WRITE_CALENDAR));
+        r.put("overlay", Settings.canDrawOverlays(getContext()));
+        call.resolve(r);
+    }
+
+    /** id: microphone | contacts | sms | calendar | overlay | accessibility. Opens the right grant flow. */
+    @PluginMethod
+    public void requestPermission(PluginCall call) {
+        String id = call.getString("id", "");
+        switch (id) {
+            case "microphone": requestPermissionForAlias("mic", call, "permDone"); return;
+            case "contacts": requestPermissionForAlias("contacts", call, "permDone"); return;
+            case "sms": requestPermissionForAlias("sms", call, "permDone"); return;
+            case "calendar": requestPermissionForAlias("calendar", call, "permDone"); return;
+            case "overlay": {
+                Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:" + getContext().getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(i);
+                call.resolve();
+                return;
+            }
+            case "accessibility": openSettings(call); return;
+            default: call.reject("unknown permission " + id);
+        }
+    }
+
+    @PermissionCallback
+    private void permDone(PluginCall call) { permissionStatus(call); }
+
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:" + getContext().getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(i);
         call.resolve();
     }
 

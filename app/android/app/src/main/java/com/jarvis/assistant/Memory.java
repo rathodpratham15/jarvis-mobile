@@ -34,6 +34,12 @@ final class Memory {
         save(c, l);
     }
 
+    static void removeExact(Context c, String fact) {
+        List<String> l = all(c);
+        l.removeIf(f -> f.equals(fact));
+        save(c, l);
+    }
+
     /** Removes memories containing the keyword ("all" clears everything). Returns how many were removed. */
     static int forget(Context c, String keyword) {
         List<String> l = all(c);

@@ -41,7 +41,8 @@ public class AssistActivity extends Activity {
 
     private VoiceRecorder recorder;
     private SpeechRecognizer deviceStt;   // fallback when Meta transcription is unavailable
-    private TextView transcript, mic;
+    private TextView transcript;
+    private ImageView mic;
     private ImageView thumb;
     private View glow, edgeHolder;
     private LinearLayout sheet;
@@ -63,6 +64,8 @@ public class AssistActivity extends Activity {
     private String missionSay;
     private int missionTotal, missionDone;
     private boolean inMission;
+    private final java.util.List<String> missionLabels = new java.util.ArrayList<>();
+    private final java.util.List<Integer> missionState = new java.util.ArrayList<>();   // 0 pending, 1 active, 2 done, 3 failed
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
@@ -169,20 +172,19 @@ public class AssistActivity extends Activity {
 
         LinearLayout bar = new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        TextView plus = new TextView(this);
-        plus.setText("+");
-        plus.setTextColor(Color.parseColor("#8FB0CC"));
-        plus.setTextSize(26);
-        plus.setGravity(Gravity.CENTER);
+        ImageView plus = new ImageView(this);
+        plus.setImageResource(R.drawable.ic_plus);
+        plus.setPadding(dp(12), dp(12), dp(12), dp(12));
+        plus.setContentDescription("Attach an image");
         plus.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*"), REQ_IMAGE));
         bar.addView(plus, new LinearLayout.LayoutParams(dp(48), dp(48)));
         View sp1 = new View(this);
         bar.addView(sp1, new LinearLayout.LayoutParams(0, 1, 1f));
 
-        mic = new TextView(this);
-        mic.setText("\uD83C\uDF99");
-        mic.setTextSize(22);
-        mic.setGravity(Gravity.CENTER);
+        mic = new ImageView(this);
+        mic.setImageResource(R.drawable.ic_mic);
+        mic.setPadding(dp(15), dp(15), dp(15), dp(15));
+        mic.setContentDescription("Speak");
         GradientDrawable mb = new GradientDrawable();
         mb.setShape(GradientDrawable.OVAL);
         mb.setColor(Color.parseColor("#B30D2540"));
@@ -231,14 +233,15 @@ public class AssistActivity extends Activity {
         listening = true;
         transcript.setText("Listening\u2026");
         mic.setVisibility(View.VISIBLE);
-        mic.setText("\u25A0");
+        mic.setImageResource(R.drawable.ic_stop);
+        mic.setContentDescription("Stop listening");
         orbState(ArcReactorOrbView.State.LISTENING);
         recorder = new VoiceRecorder(new VoiceRecorder.Listener() {
             @Override public void onLevel(float level) {
                 runOnUiThread(() -> { if (orb != null) orb.setLevel(level); });
             }
             @Override public void onResult(byte[] wav) {
-                runOnUiThread(() -> { listening = false; mic.setText("\uD83C\uDF99"); });
+                runOnUiThread(() -> { listening = false; { mic.setImageResource(R.drawable.ic_mic); mic.setContentDescription("Speak"); } });
                 if (wav == null) { runOnUiThread(() -> { orbState(ArcReactorOrbView.State.IDLE); transcript.setText("Didn't catch that \u2014 tap the mic"); }); return; }
                 runOnUiThread(() -> { orbState(ArcReactorOrbView.State.TRANSCRIBING); transcript.setText("Transcribing\u2026"); });
                 new Thread(() -> {
@@ -358,8 +361,12 @@ public class AssistActivity extends Activity {
         if (type.equals("mission")) {
             org.json.JSONArray steps = r.optJSONArray("steps");
             if (steps != null && steps.length() > 0) {
-                missionQueue.clear(); missionFailures.clear();
-                for (int i = 0; i < steps.length(); i++) missionQueue.add(steps.optJSONObject(i));
+                missionQueue.clear(); missionFailures.clear(); missionLabels.clear(); missionState.clear();
+                for (int i = 0; i < steps.length(); i++) {
+                    missionQueue.add(steps.optJSONObject(i));
+                    missionLabels.add(steps.optJSONObject(i).optString("say", "Done."));
+                    missionState.add(0);
+                }
                 missionTotal = steps.length(); missionDone = 0; missionSay = say; inMission = true;
                 runNextMission(goal);
                 return;
@@ -390,6 +397,7 @@ public class AssistActivity extends Activity {
             return;
         }
         if (inMission) {
+            if (missionDone < missionState.size()) missionState.set(missionDone, res.say != null ? 3 : 2);
             missionDone++;
             if (res.say != null) missionFailures.add(res.say);       // only failures carry a message
             runNextMission(goal);
@@ -408,17 +416,65 @@ public class AssistActivity extends Activity {
             String say = missionFailures.isEmpty() ? missionSay
                     : (missionTotal - missionFailures.size()) + " of " + missionTotal + " done. " + String.join(" ", missionFailures);
             remember(goal, say);
-            showCard(null, say);
+            showMissionCard(say);
             sayThen(say, false);
             return;
         }
         final String action = step.optString("action"), stepSay = step.optString("say", "Done.");
         final JSONObject args = step.optJSONObject("args") == null ? new JSONObject() : step.optJSONObject("args");
-        showCard(null, "Step " + (missionDone + 1) + " of " + missionTotal + "\u2026");
+        if (missionDone < missionState.size()) missionState.set(missionDone, 1);
+        showMissionCard("Working through " + missionTotal + " steps\u2026");
         new Thread(() -> {
             DeviceActions.Result res = DeviceActions.run(this, action, args);
             runOnUiThread(() -> afterDevice(goal, action, args, stepSay, res));
         }, "jarvis-mission").start();
+    }
+
+    /** Checklist card: each step shows pending / working / done / failed as it progresses. */
+    private void showMissionCard(String headline) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(dp(14), dp(14), dp(14), dp(14));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#B30D2540"));
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), Color.parseColor("#1B3A5C"));
+        c.setBackground(bg);
+        c.setOnClickListener(v -> { });
+        c.addView(text(headline, 16, "#FFFFFF", false));
+        for (int i = 0; i < missionLabels.size(); i++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            int st = missionState.get(i);
+            View mark;
+            if (st == 2 || st == 3) {
+                ImageView iv = new ImageView(this);
+                iv.setImageResource(st == 2 ? R.drawable.ic_check : R.drawable.ic_close);
+                mark = iv;
+            } else {
+                View dot = new View(this);
+                GradientDrawable d = new GradientDrawable();
+                d.setShape(GradientDrawable.OVAL);
+                if (st == 1) d.setColor(CYAN); else { d.setColor(Color.TRANSPARENT); d.setStroke(dp(1), Color.parseColor("#5B7F9E")); }
+                dot.setBackground(d);
+                if (st == 1) {
+                    ObjectAnimator p = ObjectAnimator.ofFloat(dot, "alpha", 1f, 0.3f);
+                    p.setDuration(700); p.setRepeatMode(ObjectAnimator.REVERSE); p.setRepeatCount(ObjectAnimator.INFINITE); p.start();
+                }
+                FrameLayout box = new FrameLayout(this);
+                box.addView(dot, new FrameLayout.LayoutParams(dp(10), dp(10), Gravity.CENTER));
+                mark = box;
+            }
+            row.addView(mark, new LinearLayout.LayoutParams(dp(22), dp(22)));
+            TextView t = text(missionLabels.get(i), 14, st == 3 ? "#E5484D" : st == 0 ? "#8FB0CC" : "#E8F3FF", false);
+            t.setPadding(dp(10), 0, 0, 0);
+            row.addView(t);
+            c.addView(row, spaced(8));
+        }
+        if (lastCard != null) col.removeView(lastCard);
+        lastCard = c;
+        col.addView(c, 0, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ((LinearLayout.LayoutParams) c.getLayoutParams()).bottomMargin = dp(8);
     }
 
     private void resolveChoice(String reply) {
