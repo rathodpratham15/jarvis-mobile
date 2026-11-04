@@ -43,7 +43,10 @@ public class AssistActivity extends Activity {
     private SpeechRecognizer deviceStt;   // fallback when Meta transcription is unavailable
     private TextView transcript, mic;
     private ImageView thumb;
-    private View glow;
+    private View glow, edgeHolder;
+    private LinearLayout sheet;
+    private ArcReactorOrbView orb;
+    private boolean closing;
     private ObjectAnimator glowPulse;
     private String attachment;
     private boolean submitted;
@@ -88,80 +91,138 @@ public class AssistActivity extends Activity {
 
     private View buildUi() {
         FrameLayout root = new FrameLayout(this);
-        root.setOnClickListener(v -> finish()); // tap outside the pill to dismiss
+        root.setBackgroundColor(Color.parseColor("#5904080F"));     // 35% scrim over the app behind
+        root.setOnClickListener(v -> finish());                      // tap outside the sheet to dismiss
 
-        // Glowing scrim rising from the bottom edge.
+        sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setGravity(Gravity.CENTER_HORIZONTAL);
+        sheet.setPadding(dp(18), dp(12), dp(18), dp(28));
+        GradientDrawable sbg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.parseColor("#F50D2540"), Color.parseColor("#FF070E18")});
+        float r = dp(28);
+        sbg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
+        sheet.setBackground(sbg);
+        sheet.setOnClickListener(v -> { });                          // swallow taps so the sheet doesn't dismiss
+        FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        root.addView(sheet, sl);
+
+        // Soft cyan-to-violet glow along the sheet's top edge (outside the sheet, bottom-aligned to it).
         glow = new View(this);
-        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                new int[]{Color.parseColor("#6627D3FF"), Color.TRANSPARENT});
-        glow.setBackground(g);
-        root.addView(glow, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(320), Gravity.BOTTOM));
-        glowPulse = ObjectAnimator.ofFloat(glow, "alpha", 0.55f, 1f);
-        glowPulse.setDuration(900);
+        glow.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{Color.parseColor("#6627D3FF"), Color.TRANSPARENT}));
+        FrameLayout glowHolder = new FrameLayout(this);
+        glowHolder.setClickable(false);
+        View edge = new View(this);
+        edge.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.parseColor("#0027D3FF"), Color.parseColor("#B37C5CFF"), Color.parseColor("#7327D3FF"), Color.parseColor("#0027D3FF")}));
+        glowHolder.addView(glow, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36), Gravity.BOTTOM));
+        glowHolder.addView(edge, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(2), Gravity.BOTTOM));
+        edgeHolder = glowHolder;
+        root.addView(glowHolder, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36), Gravity.BOTTOM));
+        sheet.getViewTreeObserver().addOnGlobalLayoutListener(() ->
+                glowHolder.setTranslationY(-(sheet.getHeight()) + dp(1)));
+
+        glowPulse = ObjectAnimator.ofFloat(glow, "alpha", 0.5f, 1f);
+        glowPulse.setDuration(1200);
         glowPulse.setRepeatMode(ObjectAnimator.REVERSE);
         glowPulse.setRepeatCount(ObjectAnimator.INFINITE);
         glowPulse.start();
 
-        col = new LinearLayout(this);
-        col.setOrientation(LinearLayout.VERTICAL);
-        col.setGravity(Gravity.CENTER_HORIZONTAL);
-        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
-        cl.setMargins(dp(16), 0, dp(16), dp(28));
-        root.addView(col, cl);
+        View handle = new View(this);
+        GradientDrawable hb = new GradientDrawable();
+        hb.setColor(Color.parseColor("#59E8F3FF"));
+        hb.setCornerRadius(dp(3));
+        handle.setBackground(hb);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(dp(44), dp(5));
+        hl.topMargin = dp(4); hl.bottomMargin = dp(8);
+        sheet.addView(handle, hl);
 
         thumb = new ImageView(this);
         thumb.setVisibility(View.GONE);
         thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(dp(72), dp(72));
-        tl.bottomMargin = dp(10);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(dp(64), dp(64));
+        tl.bottomMargin = dp(6);
         tl.gravity = Gravity.START;
-        col.addView(thumb, tl);
-
-        LinearLayout pill = new LinearLayout(this);
-        pill.setGravity(Gravity.CENTER_VERTICAL);
-        pill.setPadding(dp(18), dp(10), dp(10), dp(10));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#F0081522"));
-        bg.setCornerRadius(dp(36));
-        bg.setStroke(dp(1), Color.parseColor("#6627D3FF"));
-        pill.setBackground(bg);
-        pill.setOnClickListener(v -> { });   // swallow taps so the pill doesn't dismiss
-        col.addView(pill, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));
-
-        TextView plus = new TextView(this);
-        plus.setText("+");
-        plus.setTextColor(Color.WHITE);
-        plus.setTextSize(28);
-        plus.setPadding(0, 0, dp(14), dp(4));
-        plus.setOnClickListener(v -> {
-            Intent i = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*");
-            startActivityForResult(i, REQ_IMAGE);
-        });
-        pill.addView(plus);
+        sheet.addView(thumb, tl);
 
         transcript = new TextView(this);
-        transcript.setText("Listening…");
-        transcript.setTextColor(Color.parseColor("#CFEAFF"));
-        transcript.setTextSize(18);
+        transcript.setText("Listening\u2026");
+        transcript.setTextColor(CYAN);
+        transcript.setTextSize(13);
+        transcript.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        transcript.setGravity(Gravity.CENTER);
         transcript.setMaxLines(2);
-        pill.addView(transcript, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        transcript.setShadowLayer(dp(8), 0, 0, Color.parseColor("#5927D3FF"));
+        sheet.addView(transcript, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        orb = new ArcReactorOrbView(this);
+        LinearLayout.LayoutParams ol = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ol.topMargin = dp(2); ol.bottomMargin = dp(2);
+        sheet.addView(orb, ol);
+
+        col = new LinearLayout(this);          // reply text and result cards are added here
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        sheet.addView(col, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout bar = new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        TextView plus = new TextView(this);
+        plus.setText("+");
+        plus.setTextColor(Color.parseColor("#8FB0CC"));
+        plus.setTextSize(26);
+        plus.setGravity(Gravity.CENTER);
+        plus.setOnClickListener(v -> startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*"), REQ_IMAGE));
+        bar.addView(plus, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        View sp1 = new View(this);
+        bar.addView(sp1, new LinearLayout.LayoutParams(0, 1, 1f));
 
         mic = new TextView(this);
-        mic.setText("🎙");
+        mic.setText("\uD83C\uDF99");
         mic.setTextSize(22);
         mic.setGravity(Gravity.CENTER);
         GradientDrawable mb = new GradientDrawable();
         mb.setShape(GradientDrawable.OVAL);
-        mb.setColor(Color.parseColor("#1F5E8C"));
+        mb.setColor(Color.parseColor("#B30D2540"));
+        mb.setStroke(dp(2), CYAN);
         mic.setBackground(mb);
         mic.setOnClickListener(v -> {
             if (listening && recorder != null) recorder.finish();   // stop now and transcribe what was heard
             else startListening();
         });
-        pill.addView(mic, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        bar.addView(mic, new LinearLayout.LayoutParams(dp(54), dp(54)));
+        View sp2 = new View(this);
+        bar.addView(sp2, new LinearLayout.LayoutParams(0, 1, 1f));
+        bar.addView(new View(this), new LinearLayout.LayoutParams(dp(48), 1));   // balances the + button
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bl.topMargin = dp(6);
+        sheet.addView(bar, bl);
+
+        // Slide up (280 ms, ease-out).
+        sheet.setVisibility(View.INVISIBLE);
+        sheet.post(() -> {
+            sheet.setTranslationY(sheet.getHeight());
+            sheet.setVisibility(View.VISIBLE);
+            sheet.animate().translationY(0).setDuration(280)
+                    .setInterpolator(new android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)).start();
+        });
         return root;
     }
+
+    /** Slide down (200 ms) before closing. */
+    @Override
+    public void finish() {
+        if (closing || sheet == null) { super.finish(); return; }
+        closing = true;
+        sheet.animate().translationY(sheet.getHeight()).setDuration(200)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                .withEndAction(() -> { super.finish(); overridePendingTransition(0, 0); }).start();
+        if (edgeHolder != null) edgeHolder.animate().alpha(0f).setDuration(200).start();
+    }
+
+    private void orbState(ArcReactorOrbView.State s) { if (orb != null) orb.setState(s); }
 
     /** Record -> Meta transcription -> submit. Replaces Android's SpeechRecognizer. */
     private void startListening() {
@@ -170,14 +231,16 @@ public class AssistActivity extends Activity {
         listening = true;
         transcript.setText("Listening\u2026");
         mic.setVisibility(View.VISIBLE);
+        mic.setText("\u25A0");
+        orbState(ArcReactorOrbView.State.LISTENING);
         recorder = new VoiceRecorder(new VoiceRecorder.Listener() {
             @Override public void onLevel(float level) {
-                runOnUiThread(() -> { float s = 1f + level * 0.5f; mic.setScaleX(s); mic.setScaleY(s); });
+                runOnUiThread(() -> { if (orb != null) orb.setLevel(level); });
             }
             @Override public void onResult(byte[] wav) {
-                runOnUiThread(() -> { listening = false; mic.setScaleX(1f); mic.setScaleY(1f); });
-                if (wav == null) { runOnUiThread(() -> transcript.setText("Didn't catch that \u2014 tap the mic")); return; }
-                runOnUiThread(() -> transcript.setText("Transcribing\u2026"));
+                runOnUiThread(() -> { listening = false; mic.setText("\uD83C\uDF99"); });
+                if (wav == null) { runOnUiThread(() -> { orbState(ArcReactorOrbView.State.IDLE); transcript.setText("Didn't catch that \u2014 tap the mic"); }); return; }
+                runOnUiThread(() -> { orbState(ArcReactorOrbView.State.TRANSCRIBING); transcript.setText("Transcribing\u2026"); });
                 new Thread(() -> {
                     String text = null, err = null;
                     try {
@@ -232,6 +295,7 @@ public class AssistActivity extends Activity {
         submitted = true;
         transcript.setText("\u201c" + goal + "\u201d");
         mic.setVisibility(View.GONE);
+        orbState(ArcReactorOrbView.State.THINKING);
         AgentRunner.initTts(this);
         if (pendingAction != null) { resolveChoice(goal); return; }
         new Thread(() -> {
@@ -266,7 +330,9 @@ public class AssistActivity extends Activity {
 
     /** Speak, then (if `relisten`) reopen the mic automatically for the user's reply. */
     private void sayThen(String say, boolean relisten) {
+        orbState(ArcReactorOrbView.State.SPEAKING);
         AgentRunner.speak(say, () -> {
+            if (!relisten) runOnUiThread(() -> orbState(ArcReactorOrbView.State.SUCCESS));
             if (relisten && !isFinishing()) { submitted = false; mic.setVisibility(View.VISIBLE); startListening(); }
             else root().postDelayed(this::finish, 1800);
         });
@@ -276,6 +342,7 @@ public class AssistActivity extends Activity {
         String type = r.optString("type");
         String say = r.optString("say", r.optString("error", "Sorry, something went wrong."));
         if (r.has("error") && !r.has("type")) say = "Sorry, " + r.optString("error");
+        if (r.has("error")) orbState(ArcReactorOrbView.State.ERROR);
         if (type.equals("operate")) {
             // No direct tool fits: close the panel and work hidden in the background.
             AgentRunner.start(this, r.optString("goal", goal), attachment);
@@ -379,11 +446,11 @@ public class AssistActivity extends Activity {
     private void showCard(JSONObject card, String say) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(20), dp(16), dp(20), dp(16));
+        c.setPadding(dp(14), dp(14), dp(14), dp(14));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#F0081522"));
-        bg.setCornerRadius(dp(24));
-        bg.setStroke(dp(1), Color.parseColor("#6627D3FF"));
+        bg.setColor(Color.parseColor("#B30D2540"));
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), Color.parseColor("#1B3A5C"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
         c.addView(text(say, 18, "#FFFFFF", false));
@@ -410,7 +477,10 @@ public class AssistActivity extends Activity {
         if (lastCard != null) col.removeView(lastCard);
         lastCard = c;
         col.addView(c, 0, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        ((LinearLayout.LayoutParams) c.getLayoutParams()).bottomMargin = dp(12);
+        ((LinearLayout.LayoutParams) c.getLayoutParams()).bottomMargin = dp(8);
+        c.setAlpha(0f);
+        c.setTranslationY(dp(8));
+        c.animate().alpha(1f).translationY(0).setDuration(180).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
     }
 
     private TextView text(String s, int sp, String color, boolean bold) {
