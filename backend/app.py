@@ -110,6 +110,8 @@ def vision_frame():
         return jsonify(error="image (base64 JPEG, under ~2 MB) is required"), 400
     try:
         q = str(p.get("question") or "")[:300]
+        if p.get("mode") == "full":  # live scan "Full summary": short spoken line plus every section on screen
+            return jsonify(**vision.describe_full(img, q))
         if p.get("guide"):          # animated guide: friendly line plus the main item's name (never a person)
             return jsonify(**vision.describe_guide(img, q))
         return jsonify(text=vision.describe(img, q))

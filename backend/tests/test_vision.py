@@ -56,3 +56,13 @@ def test_locate_endpoint_refuses_people_and_returns_fractions(monkeypatch):
     monkeypatch.setattr(sam_grounding, "locate", lambda img, item: [Box(100, 200, 300, 400, 1000, 2000, 0.9)])
     r = c.post("/api/locate", json={"image": "A", "item": "red mug"}, headers=h).get_json()
     assert r["found"] and (r["x1"], r["y1"], r["x2"], r["y2"]) == (0.1, 0.1, 0.3, 0.2)
+
+
+def test_full_mode_returns_spoken_line_and_details():
+    f = Fake(reply="SPOKEN: A resume for Jane.\nDETAILS:\n- Experience: Acme\n- Education: NEU")
+    out = Vision(f, "m").describe_full("IMG")
+    assert out == {"text": "A resume for Jane.", "details": "- Experience: Acme\n- Education: NEU"}
+    assert "complete, well-organized summary" in f.seen["messages"][0]["content"]
+    assert "NEVER identify a real person" in f.seen["messages"][0]["content"]
+    plain = Vision(Fake(reply="Just text."), "m").describe_full("IMG")
+    assert plain["details"] == "Just text."

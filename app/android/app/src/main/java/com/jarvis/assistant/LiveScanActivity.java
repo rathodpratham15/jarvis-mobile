@@ -56,7 +56,7 @@ public class LiveScanActivity extends AppCompatActivity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final AtomicBoolean wantFrame = new AtomicBoolean(false), busy = new AtomicBoolean(false);
-    private volatile boolean paused, asking, forceNext, speakAloud;
+    private volatile boolean paused, asking, forceNext, speakAloud, summaryRequested;
     private volatile String pendingQuestion;
     private volatile long lastSentAt;
     private volatile int[] lastHash;
@@ -71,6 +71,9 @@ public class LiveScanActivity extends AppCompatActivity {
     private CameraControl cameraControl;
     private volatile long lastRefocusAt;
     private View focusRing;
+    private FrameLayout summaryOverlay;
+    private TextView summaryBody;
+    private String summarySpoken = "";
 
     // Guide character (a cartoon person who pops up from the scanned item and talks about it)
     private GuideView guide;
@@ -184,6 +187,13 @@ public class LiveScanActivity extends AppCompatActivity {
         sl.topMargin = dp(6);
         card.addView(status, sl);
 
+        TextView sumBtn = pill("Full summary of what I see");
+        sumBtn.setTextColor(Color.parseColor("#27D3FF"));
+        sumBtn.setOnClickListener(v -> requestSummary());
+        LinearLayout.LayoutParams sbl = new LinearLayout.LayoutParams(-1, dp(46));
+        sbl.topMargin = dp(12);
+        card.addView(sumBtn, sbl);
+
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         pauseBtn = pill("Pause");
@@ -219,6 +229,37 @@ public class LiveScanActivity extends AppCompatActivity {
         card.addView(note, nl);
         cardView = card;
         root.addView(card, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        summaryOverlay = new FrameLayout(this);
+        summaryOverlay.setBackgroundColor(Color.parseColor("#F5070E18"));
+        summaryOverlay.setVisibility(View.GONE);
+        summaryOverlay.setOnClickListener(v -> { });
+        LinearLayout sc = new LinearLayout(this);
+        sc.setOrientation(LinearLayout.VERTICAL);
+        sc.setPadding(dp(20), dp(52), dp(20), dp(20));
+        TextView st = label("Full summary", 20, "#FFFFFF");
+        st.setTypeface(null, android.graphics.Typeface.BOLD);
+        sc.addView(st);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        summaryBody = label("", 15, "#E8F3FF");
+        summaryBody.setLineSpacing(0, 1.2f);
+        summaryBody.setTextIsSelectable(true);
+        sv.addView(summaryBody);
+        LinearLayout.LayoutParams svl = new LinearLayout.LayoutParams(-1, 0, 1f);
+        svl.topMargin = dp(14); svl.bottomMargin = dp(14);
+        sc.addView(sv, svl);
+        LinearLayout btns = new LinearLayout(this);
+        TextView readBtn = pill("Read aloud");
+        readBtn.setOnClickListener(v -> AgentRunner.speak(summarySpoken, () -> { }));
+        TextView closeBtn = pill("Close");
+        closeBtn.setOnClickListener(v -> closeSummary());
+        btns.addView(readBtn, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        LinearLayout.LayoutParams cbl = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        cbl.leftMargin = dp(10);
+        btns.addView(closeBtn, cbl);
+        sc.addView(btns, new LinearLayout.LayoutParams(-1, -2));
+        summaryOverlay.addView(sc, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(summaryOverlay, new FrameLayout.LayoutParams(-1, -1));
         return root;
     }
 
@@ -354,30 +395,35 @@ public class LiveScanActivity extends AppCompatActivity {
         if (sharpness(bmp) < 30 && nowMs - lastRefocusAt > 4000) {          // blurred: do what a person does and refocus
             runOnUiThread(() -> { status.setText("Focusing\u2026"); focusAt(preview.getWidth() / 2f, preview.getHeight() / 2.2f, false); });
         }
-        boolean force = forceNext || pendingQuestion != null;
+        boolean force = forceNext || pendingQuestion != null || summaryRequested;
         long now = System.currentTimeMillis();
         if (!force && !changed(h, lastHash) && now - lastSentAt < FORCE_AFTER_MS) return;   // same view: do not spend a call
         final String question = pendingQuestion;
+        final boolean full = summaryRequested;
+        summaryRequested = false;
         pendingQuestion = null;
         forceNext = false;
         if (!busy.compareAndSet(false, true)) return;
         lastHash = h;
         lastSentAt = now;
         framesSent++;
-        runOnUiThread(() -> status.setText(question != null ? "Looking at that…" : "Looking…"));
+        runOnUiThread(() -> status.setText(full ? "Reading everything…" : question != null ? "Looking at that…" : "Looking…"));
         worker.execute(() -> {
             try {
-                float sc = Math.min(1f, 1280f / Math.max(bmp.getWidth(), bmp.getHeight()));
+                float sc = Math.min(1f, (full ? 1800f : 1280f) / Math.max(bmp.getWidth(), bmp.getHeight()));
                 Bitmap small = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * sc), Math.round(bmp.getHeight() * sc), true);
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
                 small.compress(Bitmap.CompressFormat.JPEG, 80, bos);
                 final String b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
-                JSONObject body = new JSONObject().put("image", b64).put("guide", guideOn);
+                JSONObject body = new JSONObject().put("image", b64).put("guide", guideOn && !full);
+                if (full) body.put("mode", "full");
                 if (question != null) body.put("question", question);
-                JSONObject r = Http.post(this, "/api/vision", body, 30000);
+                JSONObject r = Http.post(this, "/api/vision", body, full ? 70000 : 30000);
                 final String text = r.optString("text", r.optString("error", "I couldn't read that frame."));
                 final String item = r.isNull("item") ? null : r.optString("item", null);
-                runOnUiThread(() -> showResult(text, item, b64, question != null));
+                final String details = r.optString("details", "");
+                if (full) runOnUiThread(() -> showSummary(text, details.isEmpty() ? text : details));
+                else runOnUiThread(() -> showResult(text, item, b64, question != null));
             } catch (Exception e) {
                 runOnUiThread(() -> status.setText("Can't reach the server. Retrying…"));
             } finally { busy.set(false); }
@@ -483,6 +529,37 @@ public class LiveScanActivity extends AppCompatActivity {
                 guide.popOut(() -> guideBusy = false);
             }, 1600);
         });
+    }
+
+    // ---- full summary ----
+
+    private void requestSummary() {
+        if (busy.get()) { status.setText("One moment, I'm still looking…"); return; }
+        asking = true;                      // hold the live updates while the full summary is read
+        summaryRequested = true;
+        status.setText("Reading everything… hold steady");
+        wantFrame.set(true);
+    }
+
+    private void showSummary(String spoken, String details) {
+        summarySpoken = spoken;
+        summaryBody.setText(details);
+        summaryOverlay.setAlpha(0f);
+        summaryOverlay.setVisibility(View.VISIBLE);
+        summaryOverlay.animate().alpha(1f).setDuration(200).start();
+        if (guideOn) { guide.popOut(null); bubble.setVisibility(View.GONE); guideBusy = false; }
+        AgentRunner.speak(spoken, () -> { });
+    }
+
+    private void closeSummary() {
+        summaryOverlay.animate().alpha(0f).setDuration(160).withEndAction(() -> summaryOverlay.setVisibility(View.GONE)).start();
+        asking = false;
+        status.setText("Looking…");
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (summaryOverlay != null && summaryOverlay.getVisibility() == View.VISIBLE) closeSummary(); else super.onBackPressed();
     }
 
     // ---- controls ----
