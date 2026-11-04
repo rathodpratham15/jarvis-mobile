@@ -99,7 +99,7 @@ public class AssistActivity extends Activity {
         sheet.setGravity(Gravity.CENTER_HORIZONTAL);
         sheet.setPadding(dp(18), dp(12), dp(18), dp(28));
         GradientDrawable sbg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.parseColor("#F00D2540"), Color.parseColor("#FA070E18")});
+                new int[]{Color.parseColor("#F50D2540"), Color.parseColor("#FF070E18")});
         float r = dp(28);
         sbg.setCornerRadii(new float[]{r, r, r, r, 0, 0, 0, 0});
         sheet.setBackground(sbg);
