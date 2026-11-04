@@ -18,14 +18,14 @@ export const ArcReactorLogo: React.FC<ArcReactorLogoProps> = ({
       ? '#7C5CFF'
       : state === 'success'
       ? '#34D399'
-      : '#27D3FF';
+      : '#34D399';
 
   const secondaryColor =
     state === 'thinking'
       ? '#27D3FF'
       : state === 'success'
       ? '#27D3FF'
-      : '#7C5CFF';
+      : '#27D3FF';
 
   return (
     <svg
@@ -113,13 +113,15 @@ export const ArcReactorLogo: React.FC<ArcReactorLogoProps> = ({
         fill={`url(#coreGlow-${state})`}
       />
 
-      {/* Center Micro Spark */}
-      <circle
-        cx="50"
-        cy="50"
-        r="4"
-        fill="#FFFFFF"
+      {/* The JARVIS mark: a chevron over a small orb */}
+      <path
+        d="M 42.5 52 L 50 43.5 L 57.5 52"
+        stroke="#FFFFFF"
+        strokeWidth="4.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
+      <circle cx="50" cy="58.5" r="2.2" fill="#FFFFFF" />
     </svg>
   );
 };
