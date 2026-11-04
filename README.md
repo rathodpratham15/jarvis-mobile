@@ -25,7 +25,8 @@ Built for the **Meta Global AI Developer Hackathon** (Indie Developer track, the
 |---|---|
 | **Muse Spark 1.3** | Reasons about a request and picks tools (alarm, text, call, calendar, weather, ask a question, operate the screen). Also reads screenshots: "summarize this", "add this to my calendar", and each step of the screen-driving agent. |
 | **Muse Voice Transcribe 1.0** | Turns the user's speech into text, with an English language hint and app-name keywords. |
-| **SAM 3.1** | Finds icon-only buttons by name when the accessibility tree has no usable element. |
+| **SAM 3.1** | Finds icon-only buttons by name when the accessibility tree has no usable element. In live scan it also finds the scanned item in the camera view, so the guide can stand on it and follow it. |
+| **Muse Image 1.0** | Designed the **guide character** and edited it into the mouth shapes and blink that animate it (see [docs/GUIDE_CHARACTER.md](docs/GUIDE_CHARACTER.md)). |
 
 Voice out is ElevenLabs, with the phone's built-in voice as a fallback. Weather is Open-Meteo.
 
@@ -40,6 +41,9 @@ Voice out is ElevenLabs, with the phone's built-in voice as a fallback. Weather 
 | "Remember Mom is always on WhatsApp" | **On-device memory** you can view, add to and delete in the app, or by voice ("forget Mom") |
 | "Summarize this" / "add this to my calendar" / "reply to this saying I'll be late" | **Screen-aware:** the screen is captured at the wake word and sent only when your words point at it |
 | "Turn on battery saver", or anything else | **Hidden agent:** operates the screen in the background, reports the result, and can be **stopped at any time** |
+| "Scan this" | Asks **Take a photo / Live scan / Choose a photo**. A photo of a resume, sign, label or object is read: one spoken line plus the full details on the card |
+| **Live scan** | Full-screen back camera with a caption that updates when the view changes, tap-to-focus, a **Full summary** button, and spoken questions about what the camera sees |
+| The **guide** | In live scan, a cartoon guide (designed with Muse Image) **pops up from the scanned item**, talks about it with lip-sync and a fun fact, **follows it** as the camera moves, and leaves if the item is gone. A ★ counter tracks discoveries |
 | "Who are you?" | JARVIS introduces itself |
 
 There is also an in-app prompt box with a microphone button, a permissions screen with live status, a memory screen,
@@ -86,6 +90,7 @@ Samsung/Google speech, so the assistant never goes silent.
 - Before acting, the phone checks the target element still exists and the foreground app is unchanged ("stale element" protection).
 - **Stop** cancels the in-flight model request and the next action, from the pill or the app.
 - A screenshot is sent **only** when your words point at the screen ("this", "here", "reply"). It lives in memory for 90 seconds and is cleared when the panel closes.
+- A camera photo or live-scan frame is sent to Meta **only when you scan**, is never saved, and the temporary photo file is deleted. JARVIS **never identifies a real person** from their face or appearance (enforced in the prompt and tested); people are described generically and are never given a location for the guide.
 - Memory is stored only on the phone.
 - API keys live on the server; the app holds a device token. App backups are disabled and the server rate-limits each client.
 - The standard `muse-spark-1.3` model is used, **not** the `-contributor` tier (that tier trains on inputs, including screenshots).
@@ -110,7 +115,7 @@ accessibility tree has no usable element. It is a small sample on one device: a 
 
 This repository was started on **Nov 2, 2026** (see the commit history) and everything in it was written during the
 hackathon: the backend, the Android app and native services, the wake word, the panel and screens, Mission Mode, memory,
-screen awareness, the safety gate, SAM grounding and the benchmark, and the deployment. It does not use code from the
+screen awareness, the camera scan and live scan, the animated guide (its art generated and edited with Muse Image), the safety gate, SAM grounding and the benchmark, and the deployment. It does not use code from the
 author's earlier desktop assistant, which is a separate project. Third-party libraries, models and services are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The visual design was drafted with Google AI Studio and re-implemented here.
 
@@ -120,6 +125,7 @@ author's earlier desktop assistant, which is a separate project. Third-party lib
 2. Open JARVIS, tap ⚙, paste the **device token** from the submission's testing instructions, and tap **Save changes** then **Test connection**. The backend is already set to the hosted service; the first request after a quiet period can take about 30 seconds.
 3. Turn on **Accessibility → JARVIS** (the app's Fix button opens the right screen), tap **Turn on "Hey Jarvis"**, and allow microphone, contacts, SMS, calendar and "display over other apps".
 4. Say **"Hey Jarvis, temperature in Boston"**. Then try the mission example above, or tap the mic in the app and say "open the clock app".
+5. Tap **● Live scan** on the home screen (allow the camera), point at a single object on a plain surface, and wait a few seconds for the guide to pop up and talk. Tap the screen to focus; move the camera and the guide follows.
 
 ## Run it yourself
 
@@ -128,7 +134,7 @@ author's earlier desktop assistant, which is a separate project. Third-party lib
 cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env     # META_API_KEY, JARVIS_DEVICE_TOKEN; ELEVENLABS_* optional
 .venv/bin/python app.py  # http://localhost:5050
-.venv/bin/python -m pytest tests -q   # 28 tests
+.venv/bin/python -m pytest tests -q   # 37 tests
 ```
 
 **Android app** (Node 22 is fetched via `npx`, JDK 17+, Android SDK 36)
@@ -149,11 +155,13 @@ to keep the free tier awake.
 
 ```
 backend/   Flask API: assistant.py (router, tools, instant paths), phone_agent.py (screen agent, safety gate),
-           sam_grounding.py, speech.py (STT/TTS), tests/, bench/
+           sam_grounding.py, vision.py (live scan and guide), speech.py (STT/TTS), tests/, bench/
 app/       React + Capacitor app (src/screens), android/ holds the native services:
            WakeWordService, AssistActivity (panel), ArcReactorOrbView, SheetDrawable, JarvisAccessibilityService,
-           AgentRunner, StatusOverlay, DeviceActions, ContactMatcher, Memory, ScreenContext
-docs/      DEMO.md (demo script)
+           AgentRunner, StatusOverlay, DeviceActions, ContactMatcher, Memory, ScreenContext,
+           LiveScanActivity (CameraX), GuideView (sprite guide)
+scripts/   fetch-wake-model.sh, build_guide_sprites.py (builds the guide from Muse Image art)
+docs/      DEMO.md (demo script), GUIDE_CHARACTER.md (how the guide was made), screenshots/
 ```
 
 ## Known limits
@@ -163,6 +171,8 @@ docs/      DEMO.md (demo script)
 - **Server-side inference.** Reasoning and vision run on Meta's API; only the wake word runs on the device.
 - WhatsApp sending relies on its on-screen layout and may need adjusting after app updates.
 - The wake word can still mishear background speech (confidence is logged under `JarvisWake` for tuning), and speech-to-text occasionally repeats the end of a sentence.
+- **Live scan is "live" at a few-second rhythm**, not video: each look is a still frame sent to Meta's vision model (about 2 to 4 seconds), only when the view changes, and a session is capped. It needs decent light, and the guide can lose a fast-moving item.
+- The guide is a 2.5D character (generated art with swapped face patches and code-driven motion), not a rigged 3D model; Meta's API has no 3D generation.
 - Tested on one Samsung phone. Hidden-agent success on arbitrary apps is not benchmarked yet.
 
 ## License
