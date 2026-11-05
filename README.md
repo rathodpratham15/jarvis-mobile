@@ -54,6 +54,10 @@ Samsung/Google speech, so the assistant never goes silent.
 
 ## How it works
 
+![JARVIS Mobile architecture: the phone, the backend and the models](docs/architecture.png)
+
+The same flow as text:
+
 ```
  "Hey Jarvis"  (Vosk wake word, runs on the phone)
         │  captures the screen first, then opens the panel
