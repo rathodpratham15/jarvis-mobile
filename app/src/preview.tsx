@@ -14,7 +14,7 @@ const base = {
   accessibility: true as boolean | null, wake: { running: true, overlay: true }, wakeNote: "", onToggleWake: noop, onFixAccessibility: noop,
   status: "idle" as any, steps: [] as any[], message: "", run: noop, stop: noop, onNavigate: noop, onboarded: true, onFinishOnboarding: noop,
 };
-const steps = [
+const steps: any[] = [
   { step: 1, action: { action: "open_app", name: "Settings", reason: "Open Settings to find Battery." }, result: "ok" },
   { step: 2, action: { action: "tap", node: 14, reason: "Battery and device care." }, result: "ok" },
   { step: 3, action: { action: "tap", node: 6, reason: "Turn on power saving." }, result: "ok" },

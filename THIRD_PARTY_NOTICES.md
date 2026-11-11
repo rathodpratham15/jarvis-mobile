@@ -29,6 +29,6 @@ services below, each under its own terms.
 
 The visual design (colors, panel and screen layouts, icons) was drafted with Google AI Studio and then adapted and
 re-implemented for this app. The animated guide is the author's own character design, with its mouth shapes and blink generated as edits by Meta's
-Muse Image model (see `docs/GUIDE_CHARACTER.md`). No other third-party artwork or fonts are bundled.
+Muse Image model (see `docs/GUIDE_CHARACTER.md`). No other third-party artwork is bundled; the one bundled font is listed below.
 
 - **Inter** (variable font, bundled via `@fontsource-variable/inter`): SIL Open Font License 1.1, https://rsms.me/inter/
