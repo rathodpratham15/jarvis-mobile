@@ -57,9 +57,8 @@ public class AssistActivity extends Activity {
     private ImageView thumb;
     private SheetDrawable sheetBg;
     private LinearLayout sheet;
-    private ArcReactorOrbView orb;
+    private FluidOrbView orb;
     private boolean closing;
-    private ObjectAnimator glowPulse;
     private String attachment;
     private java.io.File cameraFile;       // where the camera app writes the photo (app cache, deleted after use)
     private String scanChoiceGoal;        // set while we are waiting for "photo" or "live"
@@ -110,30 +109,32 @@ public class AssistActivity extends Activity {
 
     private View buildUi() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.parseColor("#59000000"));     // 35% scrim over the app behind
+        // Real blur of whatever is behind (Android 12+, when the device allows it); otherwise a darker scrim.
+        boolean blurred = false;
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try {
+                WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+                blurred = wm.isCrossWindowBlurEnabled();
+                if (blurred) getWindow().setBackgroundBlurRadius(dp(34));
+            } catch (Throwable ignored) { }
+        }
+        root.setBackgroundColor(Color.parseColor(blurred ? "#47000000" : "#8C000000"));
         root.setOnClickListener(v -> finish());                      // tap outside the sheet to dismiss
 
         sheet = new LinearLayout(this);
         sheet.setOrientation(LinearLayout.VERTICAL);
         sheet.setGravity(Gravity.CENTER_HORIZONTAL);
         sheet.setPadding(dp(18), dp(12), dp(18), dp(28));
-        sheetBg = new SheetDrawable(getResources().getDisplayMetrics().density);
+        sheetBg = new SheetDrawable(getResources().getDisplayMetrics().density, blurred);
         sheet.setBackground(sheetBg);
         sheet.setOnClickListener(v -> { });                          // swallow taps so the sheet doesn't dismiss
         FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         root.addView(sheet, sl);
 
-        // The glow lives inside SheetDrawable and follows the curved corners; pulse its intensity.
-        glowPulse = ObjectAnimator.ofFloat(sheetBg, "intensity", 0.55f, 1f);
-        glowPulse.setDuration(1200);
-        glowPulse.setRepeatMode(ObjectAnimator.REVERSE);
-        glowPulse.setRepeatCount(ObjectAnimator.INFINITE);
-        glowPulse.start();
-
         View handle = new View(this);
         GradientDrawable hb = new GradientDrawable();
-        hb.setColor(Color.parseColor("#59F5F5F5"));
+        hb.setColor(Color.parseColor("#4DFFFFFF"));
         hb.setCornerRadius(dp(3));
         handle.setBackground(hb);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(dp(44), dp(5));
@@ -150,15 +151,14 @@ public class AssistActivity extends Activity {
 
         transcript = new TextView(this);
         transcript.setText("Listening\u2026");
-        transcript.setTextColor(CYAN);
+        transcript.setTextColor(Color.parseColor("#B8FFFFFF"));
         transcript.setTextSize(13);
         transcript.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         transcript.setGravity(Gravity.CENTER);
         transcript.setMaxLines(2);
-        transcript.setShadowLayer(dp(8), 0, 0, Color.parseColor("#59FFFFFF"));
         sheet.addView(transcript, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        orb = new ArcReactorOrbView(this);
+        orb = new FluidOrbView(this);
         LinearLayout.LayoutParams ol = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         ol.topMargin = dp(2); ol.bottomMargin = dp(2);
         sheet.addView(orb, ol);
@@ -185,8 +185,8 @@ public class AssistActivity extends Activity {
         mic.setContentDescription("Speak");
         GradientDrawable mb = new GradientDrawable();
         mb.setShape(GradientDrawable.OVAL);
-        mb.setColor(Color.parseColor("#B3141414"));
-        mb.setStroke(dp(2), CYAN);
+        mb.setColor(Color.parseColor("#26FFFFFF"));
+        mb.setStroke(dp(1), Color.parseColor("#59FFFFFF"));
         mic.setBackground(mb);
         mic.setOnClickListener(v -> {
             if (listening && recorder != null) recorder.finish();   // stop now and transcribe what was heard
@@ -221,7 +221,7 @@ public class AssistActivity extends Activity {
                 .withEndAction(() -> { super.finish(); overridePendingTransition(0, 0); }).start();
     }
 
-    private void orbState(ArcReactorOrbView.State s) { if (orb != null) orb.setState(s); }
+    private void orbState(FluidOrbView.State s) { if (orb != null) orb.setState(s); }
 
     /** Record -> Meta transcription -> submit. Replaces Android's SpeechRecognizer. */
     private void startListening() {
@@ -232,15 +232,15 @@ public class AssistActivity extends Activity {
         mic.setVisibility(View.VISIBLE);
         mic.setImageResource(R.drawable.ic_stop);
         mic.setContentDescription("Stop listening");
-        orbState(ArcReactorOrbView.State.LISTENING);
+        orbState(FluidOrbView.State.LISTENING);
         recorder = new VoiceRecorder(new VoiceRecorder.Listener() {
             @Override public void onLevel(float level) {
                 runOnUiThread(() -> { if (orb != null) orb.setLevel(level); });
             }
             @Override public void onResult(byte[] wav) {
                 runOnUiThread(() -> { listening = false; { mic.setImageResource(R.drawable.ic_mic); mic.setContentDescription("Speak"); } });
-                if (wav == null) { runOnUiThread(() -> { orbState(ArcReactorOrbView.State.IDLE); transcript.setText("Didn't catch that \u2014 tap the mic"); }); return; }
-                runOnUiThread(() -> { orbState(ArcReactorOrbView.State.TRANSCRIBING); transcript.setText("Transcribing\u2026"); });
+                if (wav == null) { runOnUiThread(() -> { orbState(FluidOrbView.State.IDLE); transcript.setText("Didn't catch that \u2014 tap the mic"); }); return; }
+                runOnUiThread(() -> { orbState(FluidOrbView.State.TRANSCRIBING); transcript.setText("Transcribing\u2026"); });
                 new Thread(() -> {
                     String text = null, err = null;
                     try {
@@ -295,7 +295,7 @@ public class AssistActivity extends Activity {
         submitted = true;
         transcript.setText("\u201c" + goal + "\u201d");
         mic.setVisibility(View.GONE);
-        orbState(ArcReactorOrbView.State.THINKING);
+        orbState(FluidOrbView.State.THINKING);
         AgentRunner.initTts(this);
         if (pendingAction != null) { resolveChoice(goal); return; }
         if (scanChoiceGoal != null) { answerScanChoice(goal); return; }
@@ -348,7 +348,7 @@ public class AssistActivity extends Activity {
     private void offerScanChoices(String goal) {
         scanChoiceGoal = goal;
         submitted = false;
-        orbState(ArcReactorOrbView.State.IDLE);
+        orbState(FluidOrbView.State.IDLE);
         showChoiceCard("How do you want to scan?", new String[]{"Take a photo", "Live scan", "Choose a photo"}, new Runnable[]{
                 () -> { String g = scanChoiceGoal; scanChoiceGoal = null; openCameraFor(g != null ? g : goal); },
                 () -> { scanChoiceGoal = null; startLiveScan(); },
@@ -368,18 +368,18 @@ public class AssistActivity extends Activity {
         submitted = false;
         mic.setVisibility(View.VISIBLE);
         transcript.setText("Say \u201cphoto\u201d or \u201clive\u201d, or tap a button.");
-        orbState(ArcReactorOrbView.State.IDLE);
+        orbState(FluidOrbView.State.IDLE);
     }
 
     /** A card with a prompt and a row of tappable buttons. */
     private void showChoiceCard(String title, String[] labels, Runnable[] actions) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(14), dp(14), dp(14), dp(14));
+        c.setPadding(dp(18), dp(16), dp(18), dp(16));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#B3141414"));
-        bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#2A2A2A"));
+        bg.setColor(Color.parseColor("#17FFFFFF"));
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), Color.parseColor("#26FFFFFF"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
         c.addView(text(title, 16, "#FFFFFF", false));
@@ -390,7 +390,7 @@ public class AssistActivity extends Activity {
             b.setGravity(Gravity.CENTER);
             GradientDrawable bb = new GradientDrawable();
             bb.setCornerRadius(dp(22));
-            if (i == 1) bb.setColor(CYAN); else { bb.setColor(Color.parseColor("#B3141414")); bb.setStroke(dp(1), Color.parseColor("#FFFFFF")); }
+            if (i == 1) bb.setColor(CYAN); else { bb.setColor(Color.parseColor("#1FFFFFFF")); bb.setStroke(dp(1), Color.parseColor("#33FFFFFF")); }
             b.setBackground(bb);
             b.setOnClickListener(v -> act.run());
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
@@ -425,7 +425,7 @@ public class AssistActivity extends Activity {
     private void openCameraFor(String goal) {
         pendingScanGoal = goal;
         submitted = false;                              // the real request is sent after the photo comes back
-        orbState(ArcReactorOrbView.State.IDLE);
+        orbState(FluidOrbView.State.IDLE);
         showCard(null, "Opening the camera\u2026 take a photo and I'll look at it.");
         withCameraPermission(() -> {
             if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -471,9 +471,9 @@ public class AssistActivity extends Activity {
 
     /** Speak, then (if `relisten`) reopen the mic automatically for the user's reply. */
     private void sayThen(String say, boolean relisten) {
-        orbState(ArcReactorOrbView.State.SPEAKING);
+        orbState(FluidOrbView.State.SPEAKING);
         AgentRunner.speak(say, () -> {
-            if (!relisten) runOnUiThread(() -> orbState(ArcReactorOrbView.State.SUCCESS));
+            if (!relisten) runOnUiThread(() -> orbState(FluidOrbView.State.SUCCESS));
             if (relisten && !isFinishing()) { submitted = false; mic.setVisibility(View.VISIBLE); startListening(); }
             else root().postDelayed(this::finish, 1800);
         });
@@ -483,7 +483,7 @@ public class AssistActivity extends Activity {
         String type = r.optString("type");
         String say = r.optString("say", r.optString("error", "Sorry, something went wrong."));
         if (r.has("error") && !r.has("type")) say = "Sorry, " + r.optString("error");
-        if (r.has("error")) orbState(ArcReactorOrbView.State.ERROR);
+        if (r.has("error")) orbState(FluidOrbView.State.ERROR);
         if (type.equals("operate")) {
             // No direct tool fits: close the panel and work hidden in the background.
             AgentRunner.start(this, r.optString("goal", goal), attachment);
@@ -572,11 +572,11 @@ public class AssistActivity extends Activity {
     private void showMissionCard(String headline) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(14), dp(14), dp(14), dp(14));
+        c.setPadding(dp(18), dp(16), dp(18), dp(16));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#B3141414"));
-        bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#2A2A2A"));
+        bg.setColor(Color.parseColor("#17FFFFFF"));
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), Color.parseColor("#26FFFFFF"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
         c.addView(text(headline, 16, "#FFFFFF", false));
@@ -640,21 +640,27 @@ public class AssistActivity extends Activity {
     private void showCard(JSONObject card, String say) {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(14), dp(14), dp(14), dp(14));
+        c.setPadding(dp(18), dp(16), dp(18), dp(16));
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#B3141414"));
-        bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#2A2A2A"));
+        bg.setColor(Color.parseColor("#17FFFFFF"));
+        bg.setCornerRadius(dp(22));
+        bg.setStroke(dp(1), Color.parseColor("#26FFFFFF"));
         c.setBackground(bg);
         c.setOnClickListener(v -> { });
-        c.addView(text(say, 18, "#FFFFFF", false));
+        c.addView(text(say, card != null ? 15 : 18, card != null ? "#D1FFFFFF" : "#FFFFFF", false));
         if (card != null) {
-            if (!card.optString("title").isEmpty()) c.addView(text(card.optString("title"), 14, "#B5B5B5", false), spaced(14));
+            if (!card.optString("title").isEmpty()) {
+                TextView tt = text(card.optString("title").toUpperCase(java.util.Locale.US), 11, "#80FFFFFF", false);
+                tt.setLetterSpacing(0.12f);
+                c.addView(tt, spaced(18));
+            }
             if (!card.optString("big").isEmpty() || !card.optString("subtitle").isEmpty()) {
                 LinearLayout row = new LinearLayout(this);
                 row.setGravity(Gravity.CENTER_VERTICAL);
-                row.addView(text(card.optString("big"), 34, "#FFFFFF", false));
-                TextView sub = text(card.optString("subtitle"), 18, "#E5E5E5", false);
+                TextView bigT = text(card.optString("big"), 38, "#FFFFFF", false);
+                bigT.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+                row.addView(bigT);
+                TextView sub = text(card.optString("subtitle"), 15, "#B3FFFFFF", false);
                 sub.setPadding(dp(16), 0, 0, 0);
                 row.addView(sub);
                 c.addView(row);
@@ -675,11 +681,15 @@ public class AssistActivity extends Activity {
             for (int i = 0; rows != null && i < rows.length(); i++) {
                 JSONArray kv = rows.optJSONArray(i);
                 LinearLayout line = new LinearLayout(this);
-                TextView k = text(kv.optString(0), 14, "#B5B5B5", false);
+                TextView k = text(kv.optString(0), 14, "#8CFFFFFF", false);
                 TextView v = text(kv.optString(1), 14, "#FFFFFF", false);
+                View hair = new View(this);
+                hair.setBackgroundColor(Color.parseColor("#14FFFFFF"));
+                c.addView(hair, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1) / 2)));
+                ((LinearLayout.LayoutParams) hair.getLayoutParams()).topMargin = dp(i == 0 ? 10 : 8);
                 line.addView(k, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 line.addView(v);
-                c.addView(line, spaced(6));
+                c.addView(line, spaced(8));
             }
         }
         if (lastCard != null) col.removeView(lastCard);
@@ -740,7 +750,6 @@ public class AssistActivity extends Activity {
     protected void onDestroy() {
         if (recorder != null) recorder.cancel();
         if (deviceStt != null) deviceStt.destroy();
-        if (glowPulse != null) glowPulse.cancel();
         ScreenContext.clear();      // never keep the screenshot around
         WakeWordService.resume();  // go back to listening for "Hey Jarvis"
         super.onDestroy();
