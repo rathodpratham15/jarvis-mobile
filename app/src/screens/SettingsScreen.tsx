@@ -37,64 +37,62 @@ export function SettingsScreen({ settings, onSave, onBack, onNavigate }: Props) 
   };
 
   return (
-    <div className="settings-screen">
-      <div className="screen-top-bar">
-        <button className="screen-back-btn touch-target" onClick={onBack} aria-label="Go back"><ChevronLeftIcon size={20} /></button>
-        <h1 className="screen-title">Settings</h1>
-        <div style={{ width: 48 }} />
+    <div className="screen">
+      <div className="screen-bar">
+        <button className="icon-btn glass" onClick={onBack} aria-label="Go back"><ChevronLeftIcon size={20} /></button>
       </div>
+      <h1 className="screen-title">Settings</h1>
 
-      <div className="form-group">
-        <label className="form-label" htmlFor="backend-url">Backend URL</label>
-        <input id="backend-url" className="form-input" inputMode="url" autoCapitalize="off" autoCorrect="off"
-          value={draft.baseUrl} onChange={(e) => edit({ baseUrl: e.target.value })} placeholder="https://your-backend.onrender.com" />
-      </div>
-      <div className="form-group">
-        <label className="form-label" htmlFor="backup-url">Backup URL <span style={{ color: "var(--text-subtle)", fontWeight: 400 }}>(optional)</span></label>
-        <input id="backup-url" className="form-input" inputMode="url" autoCapitalize="off" autoCorrect="off"
-          value={draft.fallbackUrl ?? ""} onChange={(e) => edit({ fallbackUrl: e.target.value })} placeholder="http://localhost:5050" />
-      </div>
-      <div className="form-group">
-        <label className="form-label" htmlFor="device-token">Device token</label>
-        <div className="form-input-wrap">
-          <input id="device-token" className="form-input" type={showToken ? "text" : "password"} autoCapitalize="off" autoCorrect="off"
-            value={draft.token} onChange={(e) => edit({ token: e.target.value })}
-            style={{ paddingRight: 48, fontFamily: "var(--font-mono)" }} />
-          <button type="button" className="form-input-icon-btn touch-target" onClick={() => setShowToken(!showToken)}
-            aria-label={showToken ? "Hide token" : "Show token"}>{showToken ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}</button>
+      <div>
+        <div className="group-title">Connection</div>
+        <div className="group glass">
+          <div className="field">
+            <label htmlFor="backend-url">Backend URL</label>
+            <input id="backend-url" inputMode="url" autoCapitalize="off" autoCorrect="off"
+              value={draft.baseUrl} onChange={(e) => edit({ baseUrl: e.target.value })} placeholder="https://your-backend.onrender.com" />
+          </div>
+          <div className="field">
+            <label htmlFor="backup-url">Backup URL (optional)</label>
+            <input id="backup-url" inputMode="url" autoCapitalize="off" autoCorrect="off"
+              value={draft.fallbackUrl ?? ""} onChange={(e) => edit({ fallbackUrl: e.target.value })} placeholder="http://localhost:5050" />
+          </div>
+          <div className="field">
+            <label htmlFor="device-token">Device token</label>
+            <div className="row">
+              <input id="device-token" className="mono" type={showToken ? "text" : "password"} autoCapitalize="off" autoCorrect="off"
+                value={draft.token} onChange={(e) => edit({ token: e.target.value })} />
+              <button type="button" className="icon-btn" style={{ width: 36, height: 36, color: "var(--ink-3)" }} onClick={() => setShowToken(!showToken)}
+                aria-label={showToken ? "Hide token" : "Show token"}>{showToken ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}</button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <button className="run-primary-btn touch-target" disabled={!dirty && !saved}
+      <button className="btn btn-primary btn-block" disabled={!dirty && !saved}
         onClick={() => { const c = clean(draft); setDraft(c); onSave(c); setSaved(true); }}>
-        {saved ? <><CheckIcon size={16} /><span>Saved</span></> : <span>Save changes</span>}
+        {saved ? <><CheckIcon size={18} /><span>Saved</span></> : <span>Save changes</span>}
       </button>
+      <button className="btn btn-glass btn-block" onClick={runTest} disabled={testing} style={{ height: 50, fontSize: 15 }}>
+        {testing ? <span>Connecting… (a sleeping server can take ~30 s)</span> : <><RefreshIcon size={17} /><span>Test connection</span></>}
+      </button>
+      {test && (
+        <div className={`test-result ${test.ok ? "success" : "error"}`}>
+          {test.ok ? <CheckIcon size={18} color="var(--ok)" /> : <AlertTriangleIcon size={18} color="var(--bad)" />}
+          <span>{test.msg}</span>
+        </div>
+      )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-        <button className="touch-target" onClick={runTest} disabled={testing}
-          style={{ height: 48, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-control)",
-            color: "var(--accent-cyan)", fontSize: 13, fontWeight: 600, gap: 8 }}>
-          {testing ? <span>Connecting… (a sleeping server can take ~30 s)</span> : <><RefreshIcon size={16} /><span>Test connection</span></>}
-        </button>
-        {test && (
-          <div className={`test-conn-result ${test.ok ? "success" : "error"}`}>
-            {test.ok ? <CheckIcon size={16} color="var(--success)" /> : <AlertTriangleIcon size={16} color="var(--danger)" />}
-            <span>{test.msg}</span>
-          </div>
-        )}
+      <div className="callout glass">
+        <ShieldCheckIcon size={22} style={{ flexShrink: 0, marginTop: 1 }} />
+        <p><strong>Privacy.</strong> Screenshots are sent only when you point at the screen. Contacts never leave your phone.</p>
       </div>
 
-      <div className="privacy-note-card">
-        <ShieldCheckIcon size={20} color="var(--accent-cyan)" style={{ flexShrink: 0, marginTop: 2 }} />
-        <p className="privacy-note-text"><strong>Privacy:</strong> screenshots are sent only when you point at the screen; contacts never leave your phone.</p>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-        <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>More</span>
-        <div className="nav-link-grid">
-          <button className="nav-link-btn" onClick={() => onNavigate("permissions")}>Permissions</button>
-          <button className="nav-link-btn" onClick={() => onNavigate("memory")}>Memories</button>
-          <button className="nav-link-btn" onClick={() => onNavigate("about")}>About</button>
+      <div>
+        <div className="group-title">More</div>
+        <div className="group glass">
+          <button className="nav-row" onClick={() => onNavigate("permissions")}><span>Permissions</span><span className="chev"><ChevronLeftIcon size={18} /></span></button>
+          <button className="nav-row" onClick={() => onNavigate("memory")}><span>Memories</span><span className="chev"><ChevronLeftIcon size={18} /></span></button>
+          <button className="nav-row" onClick={() => onNavigate("about")}><span>About</span><span className="chev"><ChevronLeftIcon size={18} /></span></button>
         </div>
       </div>
     </div>

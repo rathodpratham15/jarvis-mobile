@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ArcReactorLogo } from "../components/ArcReactorLogo";
-import { SettingsIcon, MicIcon, PlayIcon, StopIcon, CheckIcon, ChevronDownIcon, AlertTriangleIcon } from "../components/SvgIcons";
-import { DeviceControl, isNativeAndroid, PhoneAction } from "../deviceControl";
+import { FluidOrb, OrbState } from "../components/FluidOrb";
+import { SettingsIcon, MicIcon, StopIcon, CheckIcon, ChevronDownIcon, AlertTriangleIcon } from "../components/SvgIcons";
+import { DeviceControl, PhoneAction } from "../deviceControl";
 import { Status, Step } from "../usePhoneAgent";
 import { Screen } from "../App";
 
@@ -21,6 +22,10 @@ const label = (a: PhoneAction) => {
     default: return a.action;
   }
 };
+
+const ArrowUp = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+);
 
 interface Props {
   accessibility: boolean | null;
@@ -53,139 +58,96 @@ export function HomeScreen(p: Props) {
     setMic("idle");
   };
 
-  const header = (
-    <>
-      <header className="home-header">
-        <div className="home-brand">
-          <ArcReactorLogo size={34} state={running ? "thinking" : "idle"} />
-          <span className="home-brand-title">JARVIS</span>
-        </div>
-        <button className="home-settings-btn touch-target" onClick={() => p.onNavigate("settings")} aria-label="Open settings"><SettingsIcon size={20} /></button>
-      </header>
-      <div className="brand-tagline-bar">
-        <span className="brand-tagline">Delegate a task. It figures out how to do it.</span>
-        <span className="brand-subtitle">Just A Rather Very Intelligent System</span>
-      </div>
-    </>
+  const orb: OrbState = running ? "thinking" : mic === "listening" ? "listening" : mic === "transcribing" ? "thinking" : "idle";
+
+  const topbar = (
+    <header className="topbar">
+      <div className="brand"><ArcReactorLogo size={24} glow={false} /><span className="brand-word">JARVIS</span></div>
+      <button className="icon-btn glass" onClick={() => p.onNavigate("settings")} aria-label="Open settings"><SettingsIcon size={20} /></button>
+    </header>
   );
 
   if (!p.onboarded && !(ready && p.wake.running)) {
+    const Row = ({ n, done, title, desc, action, onClick, disabled }: { n: number; done: boolean; title: string; desc: string; action: string; onClick: () => void; disabled?: boolean }) => (
+      <div className="check-row">
+        <span className={`check-num ${done ? "done" : ""}`}>{done ? <CheckIcon size={15} /> : n}</span>
+        <div className="check-text"><div className="check-title">{title}</div><div className="check-desc">{desc}</div></div>
+        <button className={done ? "perm-btn manage" : "perm-btn grant"} onClick={onClick} disabled={disabled}>{done ? "On" : action}</button>
+      </div>
+    );
     return (
-      <div className="home-screen">
-        {header}
-        <div className="first-launch-box">
-          <div className="welcome-hero">
-            <ArcReactorLogo size={54} state="idle" />
-            <h2 className="welcome-title">Welcome to JARVIS</h2>
-            <p className="welcome-desc">To operate apps for you, turn on these three things.</p>
+      <div className="home">
+        {topbar}
+        <div className="hero">
+          <FluidOrb size={230} state="idle" />
+          <h1 className="hero-title">Welcome to JARVIS</h1>
+          <p className="hero-sub">Turn on three things so it can work for you.</p>
+        </div>
+        <div className="welcome">
+          <div className="checklist glass">
+            <Row n={1} done={ready} title="Accessibility" desc="Lets JARVIS tap, type and scroll in apps" action="Enable" onClick={p.onFixAccessibility} disabled={ready} />
+            <Row n={2} done={p.wake.running} title="“Hey Jarvis”" desc="Listens on this phone for the wake phrase" action="Turn on" onClick={p.onToggleWake} disabled={p.wake.running} />
+            <Row n={3} done={false} title="Permissions" desc="Microphone, contacts, camera, calendar" action="Review" onClick={() => p.onNavigate("permissions")} />
           </div>
-          <div className="first-launch-checklist">
-            <div className="checklist-step-item">
-              <div className="step-item-left"><span className="step-number-badge">1</span>
-                <div><div className="step-item-title">Accessibility service</div><div className="step-item-desc">Lets JARVIS tap, type and scroll in apps</div></div></div>
-              <button className="status-fix-btn touch-target" onClick={p.onFixAccessibility} disabled={ready}>{ready ? "Enabled ✓" : "Enable"}</button>
-            </div>
-            <div className="checklist-step-item">
-              <div className="step-item-left"><span className="step-number-badge">2</span>
-                <div><div className="step-item-title">“Hey Jarvis” wake word</div><div className="step-item-desc">Listens on this phone for the trigger phrase</div></div></div>
-              <button className="status-fix-btn touch-target" onClick={p.onToggleWake} disabled={p.wake.running}>{p.wake.running ? "Active ✓" : "Turn on"}</button>
-            </div>
-            <div className="checklist-step-item">
-              <div className="step-item-left"><span className="step-number-badge">3</span>
-                <div><div className="step-item-title">Permissions</div><div className="step-item-desc">Microphone, contacts, SMS, calendar, overlay</div></div></div>
-              <button className="status-fix-btn touch-target" onClick={() => p.onNavigate("permissions")}>Configure</button>
-            </div>
-          </div>
-          {p.wakeNote && <p className="message">{p.wakeNote}</p>}
-          <button className="run-primary-btn" onClick={p.onFinishOnboarding}>Get started</button>
+          {p.wakeNote && <p className="note">{p.wakeNote}</p>}
+          <div className="spacer" />
+          <button className="btn btn-primary btn-block" onClick={p.onFinishOnboarding}>Get started</button>
         </div>
       </div>
     );
   }
 
   const ok = p.status === "done";
+  const hint = mic === "listening" ? "Listening… tap to stop" : mic === "transcribing" ? "Transcribing…" : micNote || (running ? "Working on it…" : "");
+
   return (
-    <div className="home-screen">
-      {header}
+    <div className="home">
+      {topbar}
 
-      <div className="status-strip">
-        <div className={`status-card ${ready ? "active" : ""}`}>
-          <div className="status-card-info">
-            <span className="status-label">Accessibility</span>
-            <span className={`status-value ${ready ? "on" : "off"}`}>{ready ? "Active" : "Off"}</span>
-          </div>
-          {ready ? <CheckIcon size={16} color="var(--success)" />
-            : <button className="status-fix-btn touch-target" onClick={p.onFixAccessibility}>Fix</button>}
+      <div className="hero">
+        <FluidOrb size={236} state={orb} onClick={toggleMic} label="Tap to speak" />
+        <h1 className="hero-title">{running ? "On it." : "How can I help?"}</h1>
+        <p className="hero-sub">{running ? "You can stop me any time." : "Say “Hey Jarvis”, or tap the orb."}</p>
+      </div>
+
+      <div className="pills">
+        <div className={`pill glass ${ready ? "on" : ""}`}>
+          <span className="pill-dot" />
+          <div className="pill-text"><span className="pill-label">Accessibility</span><span className="pill-value">{ready ? "Active" : "Off"}</span></div>
+          {!ready && <button className="pill-act" onClick={p.onFixAccessibility}>Fix</button>}
         </div>
-        <div className={`status-card ${p.wake.running ? "active" : ""}`}>
-          <div className="status-card-info">
-            <span className="status-label">“Hey Jarvis”</span>
-            <span className={`status-value ${p.wake.running ? "on" : "off"}`}>{p.wake.running ? "Listening" : "Off"}</span>
-          </div>
+        <div className={`pill glass ${p.wake.running ? "on" : ""}`}>
+          <span className="pill-dot" />
+          <div className="pill-text"><span className="pill-label">“Hey Jarvis”</span><span className="pill-value">{p.wake.running ? "Listening" : "Off"}</span></div>
           {p.wake.running
-            ? <div className="wave-bars-anim" role="button" aria-label="Turn off Hey Jarvis" onClick={p.onToggleWake} style={{ cursor: "pointer" }}>
-                <span className="wave-bar" /><span className="wave-bar" /><span className="wave-bar" /><span className="wave-bar" /></div>
-            : <button className="status-fix-btn touch-target" onClick={p.onToggleWake}>Turn on</button>}
+            ? <button className="bars" onClick={p.onToggleWake} aria-label="Turn off Hey Jarvis"><span /><span /><span /><span /></button>
+            : <button className="pill-act" onClick={p.onToggleWake}>Turn on</button>}
         </div>
       </div>
-      {p.wakeNote && <p className="message">{p.wakeNote}</p>}
-
-      <div className="prompt-box-container">
-        <textarea className="prompt-textarea" rows={3} value={goal} onChange={(e) => setGoal(e.target.value)}
-          placeholder="Tell JARVIS what to do…" aria-label="Command for JARVIS" />
-        <div className="prompt-box-bottom">
-          <span className="prompt-status-hint">
-            {mic === "listening" ? <><span style={{ color: "var(--danger)" }}>●</span> Listening… tap to stop</>
-              : mic === "transcribing" ? <><span style={{ color: "var(--secondary-violet)" }}>●</span> Transcribing…</>
-              : micNote || "Type or tap the mic"}
-          </span>
-          {isNativeAndroid() && (
-            <button className={`mic-btn-round touch-target ${mic}`} onClick={toggleMic}
-              aria-label={mic === "listening" ? "Stop listening" : "Speak your request"}>
-              {mic === "listening" ? <StopIcon size={20} /> : <MicIcon size={22} />}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="suggestion-chips-grid">
-        {CHIPS.map((c) => <button key={c} className="suggestion-chip" onClick={() => setGoal(c)}><span>{c}</span></button>)}
-        {isNativeAndroid() && (
-          <button className="suggestion-chip" onClick={() => DeviceControl.openLiveScan().catch(() => {})}
-            style={{ borderColor: "var(--accent-cyan)", color: "var(--accent-cyan)" }}><span>● Live scan</span></button>
-        )}
-      </div>
-
-      <div className="execution-action-row">
-        {running
-          ? <button className="stop-danger-btn touch-target" onClick={p.stop}><StopIcon size={16} /><span>Stop</span></button>
-          : <button className="run-primary-btn touch-target" onClick={() => { p.run(goal); setShowLog(true); }} disabled={!goal.trim() || !ready}>
-              <PlayIcon size={16} /><span>Run</span></button>}
-        <div className={`status-badge-pill ${p.status}`}><span>●</span><span>{p.status}</span></div>
-      </div>
-      {!ready && <p className="message">Turn on the accessibility service so JARVIS can operate apps.</p>}
+      {p.wakeNote && <p className="note">{p.wakeNote}</p>}
+      {!ready && <p className="note">Turn on accessibility so JARVIS can operate apps for you.</p>}
 
       {(p.steps.length > 0 || p.message) && (
-        <div className="run-log-card">
-          <div className="run-log-header">
-            <span className="run-log-title">Activity</span>
-            <button className="run-log-toggle-btn touch-target" onClick={() => setShowLog(!showLog)} aria-expanded={showLog}>
-              <span>{showLog ? "Hide details" : "Show details"}</span>
-              <ChevronDownIcon size={14} style={{ transform: showLog ? "rotate(180deg)" : "none", transition: "transform 180ms ease" }} />
+        <div className="activity glass">
+          <div className="activity-head">
+            <span className="activity-title">Activity</span>
+            <button className="link-btn" onClick={() => setShowLog(!showLog)} aria-expanded={showLog}>
+              <span>{showLog ? "Hide" : "Details"}</span>
+              <ChevronDownIcon size={14} style={{ transform: showLog ? "rotate(180deg)" : "none", transition: "transform 200ms" }} />
             </button>
           </div>
           {p.message && (
-            <div className={`result-card-banner ${ok ? "success" : p.status === "running" ? "" : "failed"}`}>
-              {ok ? <CheckIcon size={18} color="var(--success)" style={{ marginTop: 2, flexShrink: 0 }} />
-                : <AlertTriangleIcon size={18} color="var(--warning)" style={{ marginTop: 2, flexShrink: 0 }} />}
-              <div className="result-card-text"><strong>Result:</strong> {p.message}</div>
+            <div className={`result ${ok ? "success" : running ? "" : "failed"}`}>
+              {ok ? <CheckIcon size={19} color="var(--ok)" style={{ marginTop: 1, flexShrink: 0 }} />
+                : <AlertTriangleIcon size={19} color="var(--warn)" style={{ marginTop: 1, flexShrink: 0 }} />}
+              <div>{p.message}</div>
             </div>
           )}
           {showLog && (
-            <div className="run-log-timeline">
+            <div className="timeline">
               {p.steps.map((s) => (
-                <div key={s.step} className={`timeline-step-row ${/failed|stale/i.test(s.result) ? "failed" : "success"}`}>
-                  <div className="step-label-time"><span className="step-label">{label(s.action)}</span><span className="step-time">Step {s.step}</span></div>
+                <div key={s.step} className={`step ${/failed|stale/i.test(s.result) ? "failed" : ""}`}>
+                  <div className="step-top"><span>{label(s.action)}</span><span className="step-time">Step {s.step}</span></div>
                   <div className="step-detail">{s.action.reason || s.result}</div>
                 </div>
               ))}
@@ -193,6 +155,24 @@ export function HomeScreen(p: Props) {
           )}
         </div>
       )}
+
+      <div className="spacer" />
+
+      <div className="chips">
+        {CHIPS.map((c) => <button key={c} className="chip glass" onClick={() => setGoal(c)}>{c}</button>)}
+        <button className="chip glass live" onClick={() => DeviceControl.openLiveScan().catch(() => {})}>Live scan</button>
+      </div>
+
+      <div className="composer glass">
+        <textarea rows={1} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Ask JARVIS…" aria-label="Command for JARVIS" />
+        <button className={`composer-btn mic ${mic}`} onClick={toggleMic} aria-label={mic === "listening" ? "Stop listening" : "Speak your request"}>
+          {mic === "listening" ? <StopIcon size={18} /> : <MicIcon size={21} />}
+        </button>
+        {running
+          ? <button className="composer-btn send" style={{ background: "var(--bad)", color: "#fff" }} onClick={p.stop} aria-label="Stop"><StopIcon size={16} /></button>
+          : <button className="composer-btn send" onClick={() => { p.run(goal); setShowLog(true); }} disabled={!goal.trim() || !ready} aria-label="Run"><ArrowUp /></button>}
+      </div>
+      <div className="hint">{hint}</div>
     </div>
   );
 }

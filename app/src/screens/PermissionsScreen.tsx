@@ -30,36 +30,25 @@ export function PermissionsScreen({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="permissions-screen">
-      <div className="screen-top-bar">
-        <button className="screen-back-btn touch-target" onClick={onBack} aria-label="Go back"><ChevronLeftIcon size={20} /></button>
-        <h1 className="screen-title">Permissions</h1>
-        <div style={{ width: 48 }} />
+    <div className="screen">
+      <div className="screen-bar">
+        <button className="icon-btn glass" onClick={onBack} aria-label="Go back"><ChevronLeftIcon size={20} /></button>
       </div>
-      <div className="status-card active" style={{ padding: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ShieldCheckIcon size={22} color="var(--accent-cyan)" />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{todo === 0 ? "All permissions granted" : `${todo} permission${todo > 1 ? "s" : ""} needed`}</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Each one is used only for the task you ask for.</div>
-          </div>
-        </div>
+      <h1 className="screen-title">Permissions</h1>
+      <div className="callout glass">
+        <ShieldCheckIcon size={22} style={{ flexShrink: 0, marginTop: 1 }} />
+        <p><strong>{todo === 0 ? "All permissions granted" : `${todo} permission${todo > 1 ? "s" : ""} needed`}.</strong> Each one is used only for the task you ask for.</p>
       </div>
-      <div className="permissions-list">
+      <div className="group glass">
         {ITEMS.map((p) => {
           const granted = !!st?.[p.id];
           return (
-            <div key={p.id} className={`permission-row ${granted ? "granted" : "todo"}`}>
-              <div className="permission-info">
-                <div className="permission-name-status">
-                  <span className="permission-name">{p.name}</span>
-                  <span className={`permission-badge ${granted ? "granted" : "todo"}`}>{granted ? "Granted" : "Required"}</span>
-                </div>
-                <p className="permission-desc">{p.desc}</p>
+            <div key={p.id} className="perm-row">
+              <div className="perm-info">
+                <div className="perm-name"><span>{p.name}</span><span className={`badge ${granted ? "granted" : "todo"}`}>{granted ? "Granted" : "Required"}</span></div>
+                <p className="perm-desc">{p.desc}</p>
               </div>
-              <button className={`permission-btn touch-target ${granted ? "revoke" : "grant"}`} onClick={() => act(p.id, granted)}>
-                {granted ? "Manage" : "Grant"}
-              </button>
+              <button className={`perm-btn ${granted ? "manage" : "grant"}`} onClick={() => act(p.id, granted)}>{granted ? "Manage" : "Grant"}</button>
             </div>
           );
         })}

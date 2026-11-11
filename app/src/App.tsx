@@ -88,12 +88,14 @@ export default function App() {
 
       {pending && (
         <div className="modal-overlay">
-          <div className="modal-dialog">
-            <h3 className="modal-title">Allow this action?</h3>
-            <p className="modal-desc">{pending}</p>
+          <div className="modal">
+            <div className="modal-body">
+              <h3 className="modal-title">Allow this action?</h3>
+              <p className="modal-desc">{pending}</p>
+            </div>
             <div className="modal-actions">
-              <button className="modal-cancel-btn touch-target" onClick={() => answer(false)}>Deny</button>
-              <button className="modal-confirm-btn touch-target" onClick={() => answer(true)}>Allow</button>
+              <button onClick={() => answer(false)}>Deny</button>
+              <button onClick={() => answer(true)}>Allow</button>
             </div>
           </div>
         </div>
